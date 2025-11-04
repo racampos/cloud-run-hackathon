@@ -113,6 +113,8 @@ structlog>=23.2.0
 
 ## 3. Project Structure
 
+### This Repository (Public - cloud-run-hackathon)
+
 ```
 cloud-run-hackathon/
 ├── PRD.md                          # Product Requirements Document
@@ -120,86 +122,83 @@ cloud-run-hackathon/
 ├── README.md                       # Project overview
 ├── .github/
 │   └── workflows/
-│       ├── deploy-orchestrator.yml
-│       ├── deploy-parser-linter.yml
-│       └── deploy-headless-runner.yml
-├── orchestrator/                   # ADK-based orchestration
+│       └── ci.yml                  # Lint and test orchestrator
+├── orchestrator/                   # ADK-based orchestration (PUBLIC)
 │   ├── main.py                     # Entry point
-│   ├── graph.py                    # Agent graph definition
 │   ├── agents/
 │   │   ├── __init__.py
-│   │   ├── planner.py              # Pedagogy Planner agent
-│   │   ├── designer.py             # Topology/Config Designer
-│   │   ├── author.py               # Lab Guide Author
-│   │   ├── validator.py            # Headless Runner orchestrator
-│   │   ├── rca.py                  # Root Cause Analysis
-│   │   └── publisher.py            # Final Lab Guide publisher
+│   │   ├── planner.py              # Pedagogy Planner agent (M2)
+│   │   ├── designer.py             # Topology/Config Designer (M2)
+│   │   ├── author.py               # Lab Guide Author (M2)
+│   │   ├── validator.py            # Headless Runner orchestrator (M3)
+│   │   ├── rca.py                  # Root Cause Analysis (M4)
+│   │   └── publisher.py            # Final Lab Guide publisher (M4)
 │   ├── tools/
 │   │   ├── __init__.py
 │   │   ├── parser_linter.py        # Tool wrapper for linter service
 │   │   ├── headless_runner.py      # Tool wrapper for runner job
-│   │   └── artifacts.py            # GCS artifact reader
+│   │   └── artifacts.py            # GCS artifact reader (M3)
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   ├── exercise_spec.py        # ExerciseSpec data model
 │   │   ├── design_output.py        # DesignOutput data model
-│   │   ├── draft_lab_guide.py      # DraftLabGuide model
+│   │   ├── draft_lab_guide.py      # DraftLabGuide model (M2)
 │   │   └── validation_result.py    # Validation results
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── tests/
-├── parser-linter/                  # Private validation service
-│   ├── main.py                     # FastAPI app
-│   ├── routers/
-│   │   ├── __init__.py
-│   │   ├── topology.py             # POST /lint/topology
-│   │   └── cli.py                  # POST /lint/cli
-│   ├── linter/
-│   │   ├── __init__.py
-│   │   ├── topology_validator.py   # YAML schema validation
-│   │   ├── cli_parser_stateful.py  # Stateful mode tracking
-│   │   ├── cli_parser_stateless.py # Stateless per-line validation
-│   │   └── cisco_syntax.py         # Command syntax rules
-│   ├── models/
-│   │   ├── __init__.py
-│   │   ├── requests.py             # Pydantic request models
-│   │   └── responses.py            # Pydantic response models
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── tests/
-├── headless-runner/                # Private simulation runner (closed-source)
-│   ├── main.py                     # Job entry point
-│   ├── runner/
-│   │   ├── __init__.py
-│   │   ├── executor.py             # Simulation execution
-│   │   ├── parser.py               # Payload parsing
-│   │   └── artifacts.py            # GCS writer
-│   ├── simulator/                  # Proprietary simulator integration
-│   │   ├── __init__.py
-│   │   ├── manager.py              # SimulationManager wrapper
-│   │   └── ipc.py                  # Device IPC handling
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── tests/
-├── infra/                          # Infrastructure as Code
-│   ├── terraform/
-│   │   ├── main.tf
-│   │   ├── cloud_run.tf
-│   │   ├── cloud_run_jobs.tf
-│   │   ├── gcs.tf
-│   │   ├── iam.tf
-│   │   └── variables.tf
+├── docs/                           # API documentation for all services
+│   ├── parser-linter-api.md        # Complete API contract
+│   └── headless-runner-api.md      # Complete job specification
+├── infra/                          # Infrastructure automation
+│   ├── terraform/                  # IaC (coming in M3)
 │   └── scripts/
-│       ├── deploy.sh
-│       └── setup-auth.sh
+│       ├── setup-gcp.sh            # GCP project setup
+│       ├── deploy-parser-linter.sh # Deploy from private image
+│       └── deploy-headless-runner.sh # Deploy from private image
 ├── examples/                       # Sample labs for testing
 │   ├── static-routing/
-│   ├── vlan-basic/
-│   └── ospf-two-router/
-└── docs/
-    ├── api-reference.md
-    ├── agent-architecture.md
-    └── deployment-guide.md
+│   │   ├── README.md
+│   │   └── payload.json
+│   ├── vlan-basic/                 # (M2)
+│   └── ospf-two-router/            # (M2)
+└── .pre-commit-config.yaml         # Code quality hooks
+```
+
+### Private Repositories (Not in this repo)
+
+**netgenius-parser-linter** (Separate private repository)
+```
+netgenius-parser-linter/
+├── main.py                         # FastAPI app
+├── routers/
+│   ├── topology.py                 # POST /lint/topology
+│   └── cli.py                      # POST /lint/cli
+├── linter/
+│   ├── topology_validator.py       # YAML schema validation
+│   ├── cli_parser_stateful.py      # Stateful mode tracking
+│   ├── cli_parser_stateless.py     # Stateless per-line validation
+│   └── cisco_syntax.py             # Command syntax rules
+├── models/
+│   ├── requests.py                 # Pydantic request models
+│   └── responses.py                # Pydantic response models
+├── Dockerfile
+└── requirements.txt
+```
+
+**netgenius-headless-runner** (Separate private repository)
+```
+netgenius-headless-runner/
+├── main.py                         # Job entry point
+├── runner/
+│   ├── executor.py                 # Simulation execution
+│   ├── parser.py                   # Payload parsing
+│   └── artifacts.py                # GCS writer
+├── simulator/                      # Proprietary simulator integration
+│   ├── manager.py                  # SimulationManager wrapper
+│   └── ipc.py                      # Device IPC handling
+├── Dockerfile
+└── requirements.txt
 ```
 
 ---
@@ -208,162 +207,169 @@ cloud-run-hackathon/
 
 ### M1: Foundation (Days 1-2)
 
-**Goal:** Set up infrastructure, deploy skeleton services
+**Goal:** Set up repository structure, create API contracts, prepare infrastructure
+
+**Note:** Parser-Linter and Headless Runner are implemented in separate private repositories. This milestone focuses on the public orchestrator and API documentation.
 
 #### Tasks
 
 1. **Repository & Project Setup**
-   - Initialize mono-repo structure
-   - Set up Python virtual environments
-   - Configure pre-commit hooks (black, mypy, flake8)
-   - Create base Dockerfiles for each service
+   - ✅ Initialize public repo structure (orchestrator only)
+   - ✅ Set up Python virtual environments
+   - ✅ Configure pre-commit hooks (black, mypy, flake8, isort)
+   - ✅ Create .gitignore for Python/GCP/Docker
+   - ✅ Create base Dockerfile for orchestrator
 
-2. **GCP Infrastructure**
-   - Create GCP project: `netgenius-hackathon`
-   - Set up Artifact Registry: `docker.pkg.dev/netgenius-hackathon/netgenius/*`
-   - Create GCS bucket: `netgenius-artifacts-dev`
-   - Configure service accounts:
-     - `netgenius-orchestrator@netgenius-hackathon.iam.gserviceaccount.com`
-     - `netgenius-parser-linter@netgenius-hackathon.iam.gserviceaccount.com`
-     - `netgenius-runner@netgenius-hackathon.iam.gserviceaccount.com`
-   - Set up IAM bindings (OIDC auth)
+2. **API Documentation (for Private Services)**
+   - ✅ Document Parser-Linter API contract (`docs/parser-linter-api.md`)
+     - POST /lint/topology endpoint specification
+     - POST /lint/cli endpoint specification (stateful/stateless)
+     - Request/response schemas
+     - Authentication (OIDC) requirements
+     - Error handling and examples
+   - ✅ Document Headless Runner API contract (`docs/headless-runner-api.md`)
+     - Cloud Run Job invocation methods
+     - Payload schema for simulation jobs
+     - Artifact structure and GCS paths
+     - Exit codes and monitoring
+     - Performance characteristics
 
-3. **Parser-Linter Service (Stub)**
-   - Create FastAPI app skeleton
-   - Implement `/health` endpoint
-   - Stub `/lint/topology` endpoint (returns `{"ok": true}`)
-   - Stub `/lint/cli` endpoint (returns empty results)
-   - Deploy to Cloud Run with `--no-allow-unauthenticated`
-   - Test OIDC auth from local orchestrator
+3. **GCP Infrastructure Automation**
+   - ✅ Create setup script (`infra/scripts/setup-gcp.sh`):
+     - Enable required GCP APIs
+     - Create Artifact Registry repository
+     - Create GCS bucket with lifecycle policy
+     - Create service accounts (orchestrator, parser-linter, runner)
+     - Configure IAM bindings
+   - ✅ Create deployment scripts:
+     - `deploy-parser-linter.sh` (deploys from private image)
+     - `deploy-headless-runner.sh` (deploys from private image)
+   - ⏳ **Manual step required:** Run `infra/scripts/setup-gcp.sh` to create GCP resources
 
-4. **Headless Runner (Stub)**
-   - Create Cloud Run Job skeleton
-   - Implement basic payload parsing
-   - Stub simulation execution (logs "would execute" messages)
-   - Write dummy artifacts to GCS
-   - Test job invocation via gcloud CLI
+4. **Orchestrator (Skeleton)**
+   - ✅ Create data schemas:
+     - ExerciseSpec (Planner → Designer)
+     - DesignOutput (Designer → Author)
+     - ValidationResult (Validator output)
+   - ✅ Create tool wrappers:
+     - `parser_linter.py` (API client for linter service)
+     - `headless_runner.py` (API client for runner job)
+   - ✅ Create CLI entry point:
+     - `create` command (skeleton)
+     - `test-integration` command
+     - `version` command
+     - Rich console UI
 
-5. **Orchestrator (Skeleton)**
-   - Install Google ADK
-   - Create basic agent graph with placeholder nodes
-   - Implement tool registry structure
-   - Create CLI entry point with argument parsing
-   - Test end-to-end flow with stubs
+5. **Examples & Testing**
+   - ✅ Create static routing example lab with payload.json
+   - ✅ Set up CI/CD workflow (GitHub Actions)
+     - Linting for orchestrator
+     - Documentation validation
+     - Example payload validation
 
 **Deliverables:**
-- All services deployable
-- OIDC auth working
-- Artifacts written to GCS
-- Basic CI/CD pipeline
+- ✅ Public repository with orchestrator skeleton
+- ✅ Complete API documentation for private services
+- ✅ GCP infrastructure automation scripts
+- ✅ Deployment scripts for private services
+- ✅ Example lab payload
+- ✅ CI/CD pipeline
+- ⏳ GCP project setup (manual execution required)
 
 ---
 
-### M2: Core Agents + Linting (Days 3-4)
+### M2: Core Agents + Linting Integration (Days 3-4)
 
-**Goal:** Implement Designer and Author agents with full linting integration
+**Goal:** Implement Planner, Designer, and Author agents in the orchestrator with Parser-Linter API integration
+
+**Note:** Parser-Linter service is implemented separately in private repository. This milestone focuses on orchestrator agents that consume the Parser-Linter API.
+
+**Prerequisites:**
+- Parser-Linter service deployed and accessible (implemented in private repo)
+- Service URL configured in orchestrator environment variables
 
 #### Tasks
 
-1. **Parser-Linter Implementation**
-   - **Topology Linter:**
-     - YAML schema validation
-     - Device type validation (cisco_2911, etc.)
-     - Interface naming consistency
-     - Network connectivity graph checks
-   - **CLI Linter (Stateful):**
-     - Mode tracking state machine (privileged → global → interface/router)
-     - Command syntax validation per mode
-     - Context-aware error messages
-     - Support for `stop_on_error=false`
-   - **CLI Linter (Stateless - Optional):**
-     - Per-command validation with explicit mode
-     - Granular error bucketing
-   - Add comprehensive unit tests
-   - Performance optimization (<3s for 200 commands)
+1. **Pedagogy Planner Agent**
+   - Multi-turn Q&A with instructor using LLM
+   - Extract: title, objectives, constraints, level, prerequisites
+   - Validate extracted data completeness
+   - Output: ExerciseSpec JSON
+   - No external tool calls (pure LLM reasoning)
+   - Add prompt templates for different lab types (routing, switching, security)
 
 2. **Designer Agent**
    - **Input:** ExerciseSpec (objectives, constraints, level)
    - **Process:**
-     - Generate topology YAML (devices, interfaces, networks)
-     - Create InitialConfig (base configs for all devices)
-     - Create TargetConfig (expected final state)
-   - **Validation:**
+     - Use LLM to generate topology YAML (devices, interfaces, networks)
+     - Generate InitialConfig (base configs for all devices)
+     - Generate TargetConfig (expected final state after lab completion)
+     - Use LLM to reason about network connectivity and addressing
+   - **Validation (via Parser-Linter API):**
      - Call `POST /lint/topology` with generated YAML
-     - Call `POST /lint/cli` (stateful) for InitialConfig
-     - Retry design if linting fails (max 2 iterations)
-   - **Output:** DesignOutput JSON
-   - **Tool calls:** `parser_linter.topology`, `parser_linter.cli`
+     - Call `POST /lint/cli` (stateful) for each device's InitialConfig
+     - Parse lint results and retry if errors found (max 2 iterations)
+     - Log all validation results for debugging
+   - **Output:** DesignOutput JSON with lint results attached
+   - **Tool calls:** `parser_linter.lint_topology()`, `parser_linter.lint_cli()`
 
 3. **Lab Guide Author Agent**
-   - **Input:** DesignOutput
+   - **Input:** DesignOutput (topology, configs)
    - **Process:**
-     - Generate step-by-step instructions in Markdown
-     - Interleave verification steps (`show ip interface brief`, etc.)
+     - Generate step-by-step student instructions in Markdown
+     - Interleave verification steps (`show ip interface brief`, `ping`, etc.)
      - Format per-device sections with clear numbering
-     - Add pedagogical guidance (hints, learning objectives)
-   - **Validation:**
+     - Add pedagogical guidance (hints, learning objectives, expected outputs)
+     - Include difficulty estimates per step
+   - **Validation (via Parser-Linter API):**
      - Parse Draft Lab Guide into per-device command sequences
      - Call `POST /lint/cli` (stateful) for each device section
      - Retry authoring if linting fails (max 2 iterations)
-   - **Output:** DraftLabGuide (Markdown + structured sections)
-   - **Tool calls:** `parser_linter.cli`
+   - **Output:** DraftLabGuide (Markdown + structured device sections)
+   - **Tool calls:** `parser_linter.lint_cli()`
 
-4. **Pedagogy Planner Agent**
-   - Multi-turn Q&A with instructor
-   - Extract: title, objectives, constraints, level
-   - Output: ExerciseSpec JSON
-   - No external tool calls (pure LLM reasoning)
+4. **DraftLabGuide Schema**
+   - Create `schemas/draft_lab_guide.py`
+   - Define structure for parsed lab guide sections
+   - Include device name, command sequences, verification steps
 
 5. **Integration Testing**
-   - Test Planner → Designer flow
-   - Test Designer → Author flow
-   - Verify all linting calls work correctly
-   - Test error handling and retries
+   - Test Planner → Designer flow with mock linter responses
+   - Test Designer → Author flow with mock linter responses
+   - Test end-to-end with real Parser-Linter service (if deployed)
+   - Verify error handling and retry logic
+   - Test with 2-3 different lab types (routing, VLAN, ACL)
+
+6. **Additional Examples**
+   - Create VLAN basic example payload
+   - Create OSPF two-router example payload
+   - Update examples/README.md with descriptions
 
 **Deliverables:**
-- Working Parser-Linter service with both endpoints
-- Designer agent producing valid topologies and configs
-- Author agent producing linted Draft Lab Guides
-- Unit tests for linter logic
-- Integration tests for agent flows
+- ✅ Planner agent implementation
+- ✅ Designer agent with linting integration
+- ✅ Author agent with linting integration
+- ✅ DraftLabGuide schema
+- ✅ Integration tests
+- ✅ 2 additional example labs
+- Parser-Linter service (implemented separately in private repo)
 
 ---
 
 ### M3: Headless Validation (Day 5)
 
-**Goal:** End-to-end simulation execution with artifact generation
+**Goal:** Implement Validator agent and artifact handling in orchestrator
+
+**Note:** Headless Runner service is implemented separately in private repository. This milestone focuses on orchestrator components that invoke and consume the runner.
+
+**Prerequisites:**
+- Headless Runner service deployed as Cloud Run Job (implemented in private repo)
+- GCS bucket configured for artifacts
+- Service account permissions configured
 
 #### Tasks
 
-1. **Headless Runner Implementation**
-   - **Payload Processing:**
-     - Parse JSON payload from Validator agent
-     - Extract topology YAML, device configs, step sequences
-   - **Simulator Integration:**
-     - Initialize SimulationManager with topology
-     - Start device processes via IPC
-     - Apply initial configs per device
-   - **Step Execution:**
-     - Execute command steps in sequence
-     - Execute verification steps (show commands)
-     - Capture command outputs and device states
-     - Handle errors gracefully (continue or halt based on options)
-   - **Artifact Generation:**
-     - `execution.log` (full job log)
-     - `device_histories.json` (per-device CLI timeline)
-     - `topology.yaml` (copy of input)
-     - `initial_config/` (per-device files)
-     - `final_config/` (captured running-config)
-     - `summary.json` (success/failure, timings, error summary)
-   - **GCS Upload:**
-     - Write artifacts to `/artifacts/{exercise_id}/{build_id}/`
-     - Use structured logging with exercise_id and build_id
-   - **Exit Codes:**
-     - Exit 0 if all steps succeed
-     - Exit 1 if any critical step fails
-     - Return summary JSON to stdout
-
-2. **Validator Agent**
+1. **Validator Agent** (in orchestrator)
    - **Input:** DraftLabGuide
    - **Process:**
      - Parse Markdown into runner payload format
@@ -389,11 +395,12 @@ cloud-run-hackathon/
    - Test failure cases (intentional config errors)
 
 **Deliverables:**
-- Working Headless Runner executing simulations
-- Validator agent orchestrating Cloud Run Jobs
-- Artifacts successfully written to GCS and retrieved
-- End-to-end smoke test passing
-- Negative test case (intentional error) handled correctly
+- ✅ Validator agent implementation in orchestrator
+- ✅ Artifacts tool for GCS reading
+- ✅ Cloud Run Jobs API integration
+- ✅ End-to-end smoke test (Planner → Validator)
+- ✅ Negative test case handling
+- Headless Runner service (implemented separately in private repo)
 
 ---
 
