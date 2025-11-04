@@ -1,0 +1,197 @@
+{
+  "exercise_id": "vlan-basic-001",
+  "topology_yaml": "devices:\n  sw1:\n    type: switch\n    platform: cisco_3560\n  sw2:\n    type: switch\n    platform: cisco_3560\nlinks:\n  - [sw1, GigabitEthernet0/3, sw2, GigabitEthernet0/3]\n",
+  "devices": {
+    "sw1": {
+      "platform": "cisco_3560",
+      "initial": [
+        "configure terminal",
+        "hostname SW1",
+        "end"
+      ],
+      "steps": [
+        {
+          "type": "cmd",
+          "value": "configure terminal"
+        },
+        {
+          "type": "cmd",
+          "value": "vlan 10"
+        },
+        {
+          "type": "cmd",
+          "value": "name Sales"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "vlan 20"
+        },
+        {
+          "type": "cmd",
+          "value": "name Engineering"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "interface GigabitEthernet0/1"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport mode access"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport access vlan 10"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "interface GigabitEthernet0/2"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport mode access"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport access vlan 20"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "interface GigabitEthernet0/3"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport mode trunk"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "end"
+        },
+        {
+          "type": "verify",
+          "value": "show vlan brief"
+        },
+        {
+          "type": "verify",
+          "value": "show interfaces trunk"
+        }
+      ]
+    },
+    "sw2": {
+      "platform": "cisco_3560",
+      "initial": [
+        "configure terminal",
+        "hostname SW2",
+        "end"
+      ],
+      "steps": [
+        {
+          "type": "cmd",
+          "value": "configure terminal"
+        },
+        {
+          "type": "cmd",
+          "value": "vlan 10"
+        },
+        {
+          "type": "cmd",
+          "value": "name Sales"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "vlan 20"
+        },
+        {
+          "type": "cmd",
+          "value": "name Engineering"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "interface GigabitEthernet0/1"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport mode access"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport access vlan 10"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "interface GigabitEthernet0/2"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport mode access"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport access vlan 20"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "interface GigabitEthernet0/3"
+        },
+        {
+          "type": "cmd",
+          "value": "switchport mode trunk"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "end"
+        },
+        {
+          "type": "verify",
+          "value": "show vlan brief"
+        },
+        {
+          "type": "verify",
+          "value": "show interfaces trunk"
+        }
+      ]
+    }
+  },
+  "options": {
+    "non_interactive": true
+  }
+}
