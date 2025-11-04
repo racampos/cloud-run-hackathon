@@ -54,6 +54,7 @@ logs/
 # GCP
 *.json
 !gcp-example.json
+!examples/**/*.json
 .gcloud/
 service-account-*.json
 
