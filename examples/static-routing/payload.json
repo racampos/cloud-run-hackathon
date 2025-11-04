@@ -1,0 +1,76 @@
+{
+  "exercise_id": "static-routing-001",
+  "topology_yaml": "devices:\n  r1:\n    type: router\n    platform: cisco_2911\n  r2:\n    type: router\n    platform: cisco_2911\nlinks:\n  - [r1, GigabitEthernet0/0, r2, GigabitEthernet0/0]\n",
+  "devices": {
+    "r1": {
+      "platform": "cisco_2911",
+      "initial": [
+        "configure terminal",
+        "hostname R1",
+        "interface GigabitEthernet0/0",
+        "ip address 10.0.0.1 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "end"
+      ],
+      "steps": [
+        {
+          "type": "cmd",
+          "value": "configure terminal"
+        },
+        {
+          "type": "cmd",
+          "value": "ip route 192.168.2.0 255.255.255.0 10.0.0.2"
+        },
+        {
+          "type": "cmd",
+          "value": "end"
+        },
+        {
+          "type": "verify",
+          "value": "show ip route"
+        },
+        {
+          "type": "verify",
+          "value": "ping 192.168.2.1"
+        }
+      ]
+    },
+    "r2": {
+      "platform": "cisco_2911",
+      "initial": [
+        "configure terminal",
+        "hostname R2",
+        "interface GigabitEthernet0/0",
+        "ip address 10.0.0.2 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "interface Loopback0",
+        "ip address 192.168.2.1 255.255.255.0",
+        "exit",
+        "end"
+      ],
+      "steps": [
+        {
+          "type": "cmd",
+          "value": "configure terminal"
+        },
+        {
+          "type": "cmd",
+          "value": "ip route 0.0.0.0 0.0.0.0 10.0.0.1"
+        },
+        {
+          "type": "cmd",
+          "value": "end"
+        },
+        {
+          "type": "verify",
+          "value": "show ip route"
+        }
+      ]
+    }
+  },
+  "options": {
+    "non_interactive": true
+  }
+}

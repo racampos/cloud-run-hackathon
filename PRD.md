@@ -4,8 +4,8 @@
 **Owner:** Rafael Campos
 **Scope:** Hackathon-ready MVP with a clear path to production
 **Target platform:** Google Cloud (Cloud Run + Cloud Run Jobs + Artifact Registry + GCS)
-**Public repo:** Orchestrator + Headless Runner (open)
-**Private service:** Parser-Linter (closed-source)
+**Public repo:** Orchestrator (open-source)
+**Private services:** Parser-Linter + Headless Runner (closed-source, private Docker images)
 
 ---
 
@@ -60,8 +60,8 @@ High‑level components:
 
 1. **Orchestrator (ADK)** — multi‑agent graph coordinating tool calls and data hand‑offs.
 2. **Parser‑Linter Service (private, Cloud Run)** — `/lint/topology`, `/lint/cli` (stateful/stateless).
-3. **Headless Runner (public, Cloud Run Job)** — executes the lab end‑to‑end against the **proprietary simulator** (linked as a dependency), outputs GCS artifacts.
-4. **Publisher (public)** — produces Final Lab Guide + metadata and stores artifact pointers.
+3. **Headless Runner (private, Cloud Run Job)** — executes the lab end‑to‑end against the **proprietary simulator** (linked as a dependency), outputs GCS artifacts.
+4. **Publisher (part of Orchestrator)** — produces Final Lab Guide + metadata and stores artifact pointers.
 
 Data flows:
 
@@ -143,7 +143,7 @@ Markdown + machine-readable blocks per device with command sequences and inline 
 
 ## 8) Headless Runner (Cloud Run Job)
 
-- **Image/module:** `headless_runner` (public repo), Python 3.11.
+- **Image/module:** `headless_runner` (private repo), Python 3.11.
 - **Input:** JSON payload mapped from Draft Lab Guide (per‑device sequences, topology YAML, options).
 - **Behavior:**
 
@@ -258,7 +258,7 @@ _Notes:_ human‑readable messages; `ok=true` with empty issues means pass.
 
 **Auth:** Cloud Run↔Cloud Run via **OIDC**; only Orchestrator SA has `roles/run.invoker`.
 
-### 10.2 Headless Runner API (public repo component)
+### 10.2 Headless Runner API (private repo component)
 
 - `POST headless_runner.submit_job(payload)` → `{ job_id, status_url }`
 - `GET artifacts.read({ job_id, path })` → stream artifact from GCS
