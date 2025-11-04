@@ -51,7 +51,7 @@
 │  (Cloud Run)        │                        │  (Cloud Run Job) │
 │  - /lint/topology   │                        │  - Simulator IPC │
 │  - /lint/cli        │                        │  - GCS Artifacts │
-│  PRIVATE            │                        │  PUBLIC          │
+│  PRIVATE            │                        │  PRIVATE         │
 └─────────────────────┘                        └──────────────────┘
          ↑                                                  ↓
          │                                     ┌──────────────────┐
@@ -66,11 +66,11 @@
 
 | Component | Purpose | Deployment | Visibility |
 |-----------|---------|------------|------------|
-| Orchestrator | Multi-agent coordination via ADK | Container/Local | Private |
-| Parser-Linter | Fast CLI/topology validation | Cloud Run Service | Private |
-| Headless Runner | Execute lab simulation | Cloud Run Job | Public repo |
-| Publisher | Generate final lab guides | Part of Orchestrator | Public |
-| Simulator | Proprietary network simulator | Bundled with Runner | Private |
+| Orchestrator | Multi-agent coordination via ADK | Container/Local | Public (open-source) |
+| Parser-Linter | Fast CLI/topology validation | Cloud Run Service | Private (closed-source) |
+| Headless Runner | Execute lab simulation | Cloud Run Job | Private (closed-source) |
+| Publisher | Generate final lab guides | Part of Orchestrator | Public (open-source) |
+| Simulator | Proprietary network simulator | Bundled with Runner | Private (proprietary) |
 
 ---
 
@@ -167,7 +167,7 @@ cloud-run-hackathon/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── tests/
-├── headless-runner/                # Public simulation runner
+├── headless-runner/                # Private simulation runner (closed-source)
 │   ├── main.py                     # Job entry point
 │   ├── runner/
 │   │   ├── __init__.py
