@@ -30,7 +30,7 @@ from adk_agents.planner import planner_agent
 console = Console()
 
 
-def test_interactive_planner():
+async def test_interactive_planner():
     """Test the interactive planner with multi-turn Q&A."""
 
     # Check for API key
@@ -49,7 +49,8 @@ def test_interactive_planner():
     )
 
     # Initialize ADK session and runner
-    app_name = "netgenius"
+    # Use "adk_agents" as app_name to match the package structure
+    app_name = "adk_agents"
     user_id = "instructor"
     session_id = f"planning_{int(time.time())}"
 
@@ -86,7 +87,7 @@ def test_interactive_planner():
                 console.print(f"[green]Agent:[/green] {event.content}\n")
 
         # Check if ExerciseSpec is ready
-        session = session_service.get_session(
+        session = await session_service.get_session(
             app_name=app_name,
             user_id=user_id,
             session_id=session_id
@@ -127,7 +128,7 @@ def test_interactive_planner():
                     console.print(f"[green]Agent:[/green] {event.content}\n")
 
             # Check if done
-            session = session_service.get_session(
+            session = await session_service.get_session(
                 app_name=app_name,
                 user_id=user_id,
                 session_id=session_id
@@ -157,4 +158,5 @@ def test_interactive_planner():
 
 
 if __name__ == "__main__":
-    test_interactive_planner()
+    import asyncio
+    asyncio.run(test_interactive_planner())

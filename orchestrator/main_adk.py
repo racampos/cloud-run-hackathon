@@ -80,7 +80,8 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
     pipeline = create_lab_pipeline(include_validation=not dry_run)
 
     # Initialize ADK session and runner
-    app_name = "netgenius"
+    # Use "adk_agents" as app_name to match the package structure
+    app_name = "adk_agents"
     user_id = "instructor"
     import time
     session_id = f"lab_{int(time.time())}"
