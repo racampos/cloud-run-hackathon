@@ -49,6 +49,12 @@ def cli():
 @click.option("--output", default="./output", help="Output directory for artifacts")
 def create(prompt: str, verbose: bool, dry_run: bool, output: str):
     """Create a new lab using ADK pipeline with multi-turn Q&A."""
+    import asyncio
+    asyncio.run(_create_async(prompt, verbose, dry_run, output))
+
+
+async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
+    """Async implementation of create command."""
 
     # Check for API key
     if not os.getenv("GOOGLE_API_KEY"):
@@ -80,13 +86,20 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
     pipeline = create_lab_pipeline(include_validation=not dry_run)
 
     # Initialize ADK session and runner
-    # Use "adk_agents" as app_name to match the package structure
     app_name = "adk_agents"
     user_id = "instructor"
     import time
     session_id = f"lab_{int(time.time())}"
 
     session_service = InMemorySessionService()
+
+    # Create session first (required before running)
+    await session_service.create_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id
+    )
+
     runner = Runner(
         agent=pipeline,
         app_name=app_name,
@@ -122,7 +135,7 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
                 console.print(f"\n[green]{event.content}[/green]\n")
 
         # Check session state
-        session = session_service.get_session(
+        session = await session_service.get_session(
             app_name=app_name,
             user_id=user_id,
             session_id=session_id
@@ -160,7 +173,7 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
                 if hasattr(event, 'content') and event.content:
                     console.print(f"\n[green]{event.content}[/green]\n")
 
-            session = session_service.get_session(
+            session = await session_service.get_session(
                 app_name=app_name,
                 user_id=user_id,
                 session_id=session_id

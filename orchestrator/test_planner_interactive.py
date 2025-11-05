@@ -55,6 +55,14 @@ async def test_interactive_planner():
     session_id = f"planning_{int(time.time())}"
 
     session_service = InMemorySessionService()
+
+    # Create session first (required before running)
+    await session_service.create_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id
+    )
+
     runner = Runner(
         agent=planner_agent,
         app_name=app_name,
