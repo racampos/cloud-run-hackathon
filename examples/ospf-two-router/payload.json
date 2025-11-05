@@ -1,0 +1,133 @@
+{
+  "exercise_id": "ospf-two-router-001",
+  "topology_yaml": "devices:\n  r1:\n    type: router\n    platform: cisco_2911\n  r2:\n    type: router\n    platform: cisco_2911\nlinks:\n  - [r1, GigabitEthernet0/1, r2, GigabitEthernet0/0]\n",
+  "devices": {
+    "r1": {
+      "platform": "cisco_2911",
+      "initial": [
+        "configure terminal",
+        "hostname R1",
+        "interface GigabitEthernet0/0",
+        "ip address 192.168.1.1 255.255.255.0",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/1",
+        "ip address 10.0.12.1 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "end"
+      ],
+      "steps": [
+        {
+          "type": "verify",
+          "value": "show ip interface brief"
+        },
+        {
+          "type": "cmd",
+          "value": "configure terminal"
+        },
+        {
+          "type": "cmd",
+          "value": "router ospf 1"
+        },
+        {
+          "type": "cmd",
+          "value": "network 192.168.1.0 0.0.0.255 area 0"
+        },
+        {
+          "type": "cmd",
+          "value": "network 10.0.12.0 0.0.0.3 area 0"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "end"
+        },
+        {
+          "type": "verify",
+          "value": "show ip protocols"
+        },
+        {
+          "type": "verify",
+          "value": "show ip ospf neighbor"
+        },
+        {
+          "type": "verify",
+          "value": "show ip route ospf"
+        },
+        {
+          "type": "verify",
+          "value": "ping 192.168.2.1"
+        }
+      ]
+    },
+    "r2": {
+      "platform": "cisco_2911",
+      "initial": [
+        "configure terminal",
+        "hostname R2",
+        "interface GigabitEthernet0/0",
+        "ip address 10.0.12.2 255.255.255.252",
+        "no shutdown",
+        "exit",
+        "interface GigabitEthernet0/1",
+        "ip address 192.168.2.1 255.255.255.0",
+        "no shutdown",
+        "exit",
+        "end"
+      ],
+      "steps": [
+        {
+          "type": "verify",
+          "value": "show ip interface brief"
+        },
+        {
+          "type": "cmd",
+          "value": "configure terminal"
+        },
+        {
+          "type": "cmd",
+          "value": "router ospf 1"
+        },
+        {
+          "type": "cmd",
+          "value": "network 10.0.12.0 0.0.0.3 area 0"
+        },
+        {
+          "type": "cmd",
+          "value": "network 192.168.2.0 0.0.0.255 area 0"
+        },
+        {
+          "type": "cmd",
+          "value": "exit"
+        },
+        {
+          "type": "cmd",
+          "value": "end"
+        },
+        {
+          "type": "verify",
+          "value": "show ip protocols"
+        },
+        {
+          "type": "verify",
+          "value": "show ip ospf neighbor"
+        },
+        {
+          "type": "verify",
+          "value": "show ip route ospf"
+        },
+        {
+          "type": "verify",
+          "value": "ping 192.168.1.1"
+        }
+      ]
+    }
+  },
+  "options": {
+    "non_interactive": true
+  }
+}

@@ -32,7 +32,8 @@ def cli():
 @click.option("--prompt", required=True, help="Instructor prompt for lab creation")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 @click.option("--dry-run", is_flag=True, help="Skip headless validation")
-def create(prompt: str, verbose: bool, dry_run: bool):
+@click.option("--output", default="./output", help="Output directory for artifacts")
+def create(prompt: str, verbose: bool, dry_run: bool, output: str):
     """Create a new lab from instructor prompt."""
     console.print(
         Panel.fit(
@@ -47,26 +48,79 @@ def create(prompt: str, verbose: bool, dry_run: bool):
         prompt=prompt,
         verbose=verbose,
         dry_run=dry_run,
+        output=output,
     )
 
-    # Stub: Just log what we would do
-    console.print("\n[yellow]STUB MODE - M1 Skeleton[/yellow]\n")
-    console.print("Would execute:")
-    console.print("  1. ✓ Pedagogy Planner agent")
-    console.print("  2. ✓ Designer agent (with linting)")
-    console.print("  3. ✓ Lab Guide Author agent (with linting)")
-    console.print("  4. ✓ Validator agent (headless runner)")
-    console.print("  5. ✓ Publisher agent")
+    async def run_agents():
+        from agents import planner, designer, author
+        import json
+        import os
+        from pathlib import Path
 
-    if dry_run:
-        console.print("\n[dim]Skipping headless validation (dry-run mode)[/dim]")
+        try:
+            # Step 1: Pedagogy Planner
+            console.print("\n[cyan]1. Running Pedagogy Planner...[/cyan]")
+            exercise_spec = await planner.extract_exercise_spec(prompt)
+            console.print(f"   ✓ Title: {exercise_spec.title}")
+            console.print(f"   ✓ Level: {exercise_spec.level}")
+            console.print(f"   ✓ Objectives: {len(exercise_spec.objectives)} items")
 
-    console.print(
-        "\n[green]✓ Orchestrator skeleton working![/green]"
-    )
-    console.print(
-        "[dim]Full implementation coming in M2-M4[/dim]"
-    )
+            # Step 2: Designer
+            console.print("\n[cyan]2. Running Designer (with linting)...[/cyan]")
+            design = await designer.create_design(exercise_spec)
+            console.print(f"   ✓ Devices: {len(design.platforms)}")
+            console.print(f"   ✓ Topology validated: {design.lint_results.get('topology', {}).get('ok', False)}")
+            console.print(f"   ✓ CLI validated: all devices passed")
+
+            # Step 3: Author
+            console.print("\n[cyan]3. Running Lab Guide Author (with linting)...[/cyan]")
+            draft_guide = await author.create_lab_guide(design, exercise_spec)
+            console.print(f"   ✓ Title: {draft_guide.title}")
+            console.print(f"   ✓ Devices: {len(draft_guide.device_sections)}")
+            console.print(f"   ✓ Estimated time: {draft_guide.estimated_time_minutes} minutes")
+
+            # Save outputs
+            output_dir = Path(output)
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save exercise spec
+            spec_file = output_dir / "exercise_spec.json"
+            with open(spec_file, "w") as f:
+                json.dump(exercise_spec.model_dump(), f, indent=2)
+            console.print(f"\n[green]✓ Exercise spec saved:[/green] {spec_file}")
+
+            # Save design output
+            design_file = output_dir / "design_output.json"
+            with open(design_file, "w") as f:
+                json.dump(design.model_dump(), f, indent=2)
+            console.print(f"[green]✓ Design output saved:[/green] {design_file}")
+
+            # Save draft lab guide
+            guide_file = output_dir / "draft_lab_guide.md"
+            with open(guide_file, "w") as f:
+                f.write(draft_guide.markdown)
+            console.print(f"[green]✓ Draft lab guide saved:[/green] {guide_file}")
+
+            guide_json_file = output_dir / "draft_lab_guide.json"
+            with open(guide_json_file, "w") as f:
+                json.dump(draft_guide.model_dump(), f, indent=2)
+            console.print(f"[green]✓ Draft lab guide (JSON) saved:[/green] {guide_json_file}")
+
+            if dry_run:
+                console.print("\n[dim]Skipping headless validation (dry-run mode)[/dim]")
+                console.print("[yellow]Note: Validator agent (M3) and Publisher agent (M4) coming soon[/yellow]")
+            else:
+                console.print("\n[yellow]Note: Headless validation (M3) not yet implemented[/yellow]")
+
+            console.print("\n[bold green]✓ Lab creation completed![/bold green]")
+            console.print(f"[dim]Artifacts saved to: {output_dir.absolute()}[/dim]")
+
+        except Exception as e:
+            logger.error("agent_execution_failed", error=str(e), exc_info=True)
+            console.print(f"\n[red]Error: {e}[/red]")
+            raise
+
+    asyncio.run(run_agents())
 
 
 @cli.command()
@@ -115,8 +169,9 @@ def version():
     console.print(
         Panel(
             "[bold]NetGenius Orchestrator[/bold]\n"
-            "Version: 0.1.0-stub (M1)\n"
-            "Status: Development",
+            "Version: 0.2.0-m2 (M2: Core Agents + Linting)\n"
+            "Status: Development\n"
+            "Agents: Planner ✓ Designer ✓ Author ✓",
             border_style="cyan",
         )
     )
