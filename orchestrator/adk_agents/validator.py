@@ -7,11 +7,16 @@ headless network simulation validation.
 import os
 import asyncio
 import structlog
-from google.adk.agents import BaseAgent
-from google.adk.session import InvocationContext
-from google.cloud import run_v2
-from google.auth import default
-from tools.artifacts import fetch_validation_artifacts
+from google.adk.agents import BaseAgent, InvocationContext
+
+# Cloud Run imports - only needed for full validation (not dry-run)
+try:
+    from google.cloud import run_v2
+    from google.auth import default
+    from tools.artifacts import fetch_validation_artifacts
+    CLOUD_RUN_AVAILABLE = True
+except ImportError:
+    CLOUD_RUN_AVAILABLE = False
 
 logger = structlog.get_logger()
 
@@ -33,14 +38,22 @@ class ValidatorAgent(BaseAgent):
             name="ValidatorAgent",
             description="Validates lab guides via headless Containerlab simulation"
         )
-        self.project_id = os.getenv("GCP_PROJECT_ID", "netgenius-hackathon")
-        self.region = os.getenv("REGION", "us-central1")
-        self.bucket_name = os.getenv("GCS_BUCKET", "netgenius-artifacts-dev")
-        self.job_name = "headless-runner"
+        # Store config as instance variables (not Pydantic fields)
+        object.__setattr__(self, 'project_id', os.getenv("GCP_PROJECT_ID", "netgenius-hackathon"))
+        object.__setattr__(self, 'region', os.getenv("REGION", "us-central1"))
+        object.__setattr__(self, 'bucket_name', os.getenv("GCS_BUCKET", "netgenius-artifacts-dev"))
+        object.__setattr__(self, 'job_name', "headless-runner")
 
     async def run_async(self, context: InvocationContext):
         """Execute headless validation workflow."""
         logger.info("validator_started")
+
+        if not CLOUD_RUN_AVAILABLE:
+            logger.error("cloud_run_not_available")
+            raise ImportError(
+                "Cloud Run libraries not available. Install with: "
+                "pip install google-cloud-run google-auth"
+            )
 
         # 1. Read inputs from session state
         draft_guide = context.session.state.get("draft_lab_guide")

@@ -165,7 +165,6 @@ Return DraftLabGuide JSON matching the schema. The markdown will be auto-generat
 """,
         tools=[lint_cli],
         output_key="draft_lab_guide",
-        output_schema=DraftLabGuide,
     )
 
 

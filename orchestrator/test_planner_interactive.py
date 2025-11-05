@@ -15,8 +15,8 @@ import time
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.panel import Panel
-from google.adk.runner import Runner
-from google.adk.session import InMemorySessionService
+from google.adk import Runner
+from google.adk.sessions import InMemorySessionService
 
 # Load environment variables
 load_dotenv()

@@ -133,5 +133,4 @@ Please provide your answers so I can create the lab specification.
 (Then wait for user response in next turn)
 """,
     output_key="exercise_spec",
-    output_schema=ExerciseSpec,
 )

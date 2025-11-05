@@ -14,8 +14,8 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 from dotenv import load_dotenv
-from google.adk.runner import Runner
-from google.adk.session import InMemorySessionService
+from google.adk import Runner
+from google.adk.sessions import InMemorySessionService
 
 # Load environment variables
 load_dotenv()
@@ -72,11 +72,11 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
         output=output,
     )
 
-    # Import pipeline
-    from adk_agents.pipeline import lab_creation_pipeline, lab_creation_pipeline_no_validation
+    # Import and create pipeline
+    from adk_agents.pipeline import create_lab_pipeline
 
-    # Select pipeline based on dry-run flag
-    pipeline = lab_creation_pipeline_no_validation if dry_run else lab_creation_pipeline
+    # Create pipeline based on dry-run flag
+    pipeline = create_lab_pipeline(include_validation=not dry_run)
 
     # Initialize ADK session
     session_service = InMemorySessionService()

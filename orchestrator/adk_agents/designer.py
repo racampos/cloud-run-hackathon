@@ -5,7 +5,6 @@ and configurations, validating them with the parser-linter service.
 """
 
 from google.adk.agents import LlmAgent
-from google.adk.planners import BuiltInPlanner
 from schemas import DesignOutput, ExerciseSpec
 from tools.parser_linter import lint_topology, lint_cli
 
@@ -145,8 +144,6 @@ When calling lint_cli, commands must be list of dicts: [{"command": "show versio
 """,
         tools=[lint_topology, lint_cli],
         output_key="design_output",
-        output_schema=DesignOutput,
-        planner=BuiltInPlanner(),  # Multi-step reasoning and planning
     )
 
 

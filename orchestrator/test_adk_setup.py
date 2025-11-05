@@ -40,8 +40,8 @@ def test_adk_setup():
     # Test 3: Import ADK components
     try:
         from google.adk.agents import LlmAgent
-        from google.adk.runner import Runner
-        from google.adk.session import InMemorySessionService
+        from google.adk import Runner
+        from google.adk.sessions import InMemorySessionService
         console.print("[green]✓ ADK components imported[/green]")
     except ImportError as e:
         console.print(f"[red]✗ Failed to import ADK components: {e}[/red]")
