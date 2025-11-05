@@ -16,6 +16,7 @@ from rich.panel import Panel
 from dotenv import load_dotenv
 from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
 # Load environment variables
 load_dotenv()
@@ -78,17 +79,18 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
     # Create pipeline based on dry-run flag
     pipeline = create_lab_pipeline(include_validation=not dry_run)
 
-    # Initialize ADK session
-    session_service = InMemorySessionService()
-    runner = Runner(
-        agent=pipeline,
-        app_name="netgenius",
-        session_service=session_service
-    )
-
+    # Initialize ADK session and runner
+    app_name = "netgenius"
     user_id = "instructor"
     import time
     session_id = f"lab_{int(time.time())}"
+
+    session_service = InMemorySessionService()
+    runner = Runner(
+        agent=pipeline,
+        app_name=app_name,
+        session_service=session_service
+    )
 
     # Interactive mode if no prompt provided
     if not prompt:
@@ -100,11 +102,17 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
 
     # Run pipeline
     try:
+        # Create initial message
+        message = types.Content(
+            parts=[types.Part(text=prompt)],
+            role="user"
+        )
+
         # Initial run
         events = list(runner.run(
             user_id=user_id,
             session_id=session_id,
-            new_message=prompt
+            new_message=message
         ))
 
         # Display agent responses
@@ -113,7 +121,11 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
                 console.print(f"\n[green]{event.content}[/green]\n")
 
         # Check session state
-        session = session_service.get_session(user_id, session_id)
+        session = session_service.get_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id
+        )
 
         # Multi-turn Q&A loop (for Planner agent)
         max_turns = 5
@@ -130,18 +142,28 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
 
             console.print("\n[cyan]Processing...[/cyan]\n")
 
+            # Create message from user response
+            message = types.Content(
+                parts=[types.Part(text=user_response)],
+                role="user"
+            )
+
             # Continue conversation
             events = list(runner.run(
                 user_id=user_id,
                 session_id=session_id,
-                new_message=user_response
+                new_message=message
             ))
 
             for event in events:
                 if hasattr(event, 'content') and event.content:
                     console.print(f"\n[green]{event.content}[/green]\n")
 
-            session = session_service.get_session(user_id, session_id)
+            session = session_service.get_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id
+            )
 
         # Pipeline completed
         if "exercise_spec" in session.state:

@@ -17,6 +17,7 @@ from rich.console import Console
 from rich.panel import Panel
 from google.adk import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
 # Load environment variables
 load_dotenv()
@@ -47,16 +48,17 @@ def test_interactive_planner():
         )
     )
 
-    # Initialize ADK session
+    # Initialize ADK session and runner
+    app_name = "netgenius"
+    user_id = "instructor"
+    session_id = f"planning_{int(time.time())}"
+
     session_service = InMemorySessionService()
     runner = Runner(
         agent=planner_agent,
-        app_name="netgenius",
+        app_name=app_name,
         session_service=session_service
     )
-
-    user_id = "instructor"
-    session_id = f"planning_{int(time.time())}"
 
     console.print("\n[dim]This agent will ask clarifying questions about your lab requirements.[/dim]\n")
 
@@ -66,10 +68,16 @@ def test_interactive_planner():
     console.print("\n[cyan]Agent is thinking...[/cyan]\n")
 
     try:
+        # Create Content message from string
+        message = types.Content(
+            parts=[types.Part(text=initial_prompt)],
+            role="user"
+        )
+
         events = list(runner.run(
             user_id=user_id,
             session_id=session_id,
-            new_message=initial_prompt
+            new_message=message
         ))
 
         # Print agent's response (questions or ExerciseSpec)
@@ -78,7 +86,11 @@ def test_interactive_planner():
                 console.print(f"[green]Agent:[/green] {event.content}\n")
 
         # Check if ExerciseSpec is ready
-        session = session_service.get_session(user_id, session_id)
+        session = session_service.get_session(
+            app_name=app_name,
+            user_id=user_id,
+            session_id=session_id
+        )
 
         # Multi-turn loop
         max_turns = 5  # Prevent infinite loops
@@ -96,11 +108,17 @@ def test_interactive_planner():
 
             console.print("\n[cyan]Agent is thinking...[/cyan]\n")
 
+            # Create message from user response
+            message = types.Content(
+                parts=[types.Part(text=user_response)],
+                role="user"
+            )
+
             # Continue conversation (session preserves history)
             events = list(runner.run(
                 user_id=user_id,
                 session_id=session_id,
-                new_message=user_response
+                new_message=message
             ))
 
             # Print agent's response
@@ -109,7 +127,11 @@ def test_interactive_planner():
                     console.print(f"[green]Agent:[/green] {event.content}\n")
 
             # Check if done
-            session = session_service.get_session(user_id, session_id)
+            session = session_service.get_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id
+            )
 
             if "exercise_spec" in session.state:
                 console.print("\n[bold green]✓ Exercise specification complete![/bold green]\n")
