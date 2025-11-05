@@ -23,6 +23,17 @@ async def lint_topology(topology_yaml: str) -> dict:
     """
     logger.info("calling_lint_topology", topology_length=len(topology_yaml))
 
+    # Mock mode: Parser-linter service is not deployed yet
+    if os.getenv("MOCK_LINTER", "true").lower() == "true":
+        logger.info("lint_topology_mocked", mode="mock")
+        # Simple validation: check if it's valid YAML
+        try:
+            import yaml
+            yaml.safe_load(topology_yaml)
+            return {"ok": True, "issues": []}
+        except Exception as e:
+            return {"ok": False, "issues": [{"severity": "error", "message": f"Invalid YAML: {str(e)}"}]}
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
@@ -64,6 +75,15 @@ async def lint_cli(
         sequence_mode=sequence_mode,
         num_commands=len(commands),
     )
+
+    # Mock mode: Parser-linter service is not deployed yet
+    if os.getenv("MOCK_LINTER", "true").lower() == "true":
+        logger.info("lint_cli_mocked", mode="mock", num_commands=len(commands))
+        # Mock: all commands pass
+        return {
+            "results": [{"ok": True, "command": cmd.get("command", ""), "message": "Mocked - OK"} for cmd in commands],
+            "parser_version": "mock-1.0.0",
+        }
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
