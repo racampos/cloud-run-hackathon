@@ -22,7 +22,7 @@ console = Console()
 
 
 @click.group()
-@click.version_option(version="0.1.0-stub")
+@click.version_option(version="0.3.0-m3")
 def cli():
     """NetGenius Orchestrator - Multi-agent lab generation system."""
     pass
@@ -106,11 +106,36 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
                 json.dump(draft_guide.model_dump(), f, indent=2)
             console.print(f"[green]✓ Draft lab guide (JSON) saved:[/green] {guide_json_file}")
 
+            # Step 4: Validator (M3)
             if dry_run:
                 console.print("\n[dim]Skipping headless validation (dry-run mode)[/dim]")
-                console.print("[yellow]Note: Validator agent (M3) and Publisher agent (M4) coming soon[/yellow]")
             else:
-                console.print("\n[yellow]Note: Headless validation (M3) not yet implemented[/yellow]")
+                console.print("\n[cyan]4. Running Validator (headless execution)...[/cyan]")
+                from agents import validator
+                from tools.artifacts import save_artifacts_locally
+
+                validation_result = await validator.validate_lab(
+                    draft_guide=draft_guide,
+                    topology_yaml=design.topology_yaml,
+                    initial_configs=design.initial_configs,
+                )
+
+                console.print(f"   ✓ Execution ID: {validation_result.execution_id}")
+                console.print(f"   ✓ Duration: {validation_result.duration_seconds:.1f}s")
+                console.print(f"   ✓ Status: {'PASS' if validation_result.success else 'FAIL'}")
+                console.print(f"   ✓ Steps: {validation_result.artifacts.passed_steps}/{validation_result.artifacts.total_steps} passed")
+
+                # Save validation artifacts locally
+                await save_artifacts_locally(
+                    artifacts=validation_result.artifacts,
+                    output_dir=str(output_dir / "validation"),
+                )
+                console.print(f"[green]✓ Validation artifacts saved:[/green] {output_dir / 'validation'}")
+
+                if not validation_result.success:
+                    console.print("\n[red]✗ Validation FAILED - Lab needs revision[/red]")
+                else:
+                    console.print("\n[bold green]✓ Validation PASSED - Lab ready for publishing[/bold green]")
 
             console.print("\n[bold green]✓ Lab creation completed![/bold green]")
             console.print(f"[dim]Artifacts saved to: {output_dir.absolute()}[/dim]")
@@ -169,9 +194,9 @@ def version():
     console.print(
         Panel(
             "[bold]NetGenius Orchestrator[/bold]\n"
-            "Version: 0.2.0-m2 (M2: Core Agents + Linting)\n"
+            "Version: 0.3.0-m3 (M3: Headless Validation)\n"
             "Status: Development\n"
-            "Agents: Planner ✓ Designer ✓ Author ✓",
+            "Agents: Planner ✓ Designer ✓ Author ✓ Validator ✓",
             border_style="cyan",
         )
     )

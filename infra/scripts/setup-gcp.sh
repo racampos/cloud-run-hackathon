@@ -79,13 +79,17 @@ gcloud iam service-accounts create netgenius-runner \
 # Grant permissions
 echo ""
 echo "5. Configuring IAM permissions..."
+echo "Waiting 10 seconds for service accounts to propagate..."
+sleep 10
 
 # Runner SA can write to GCS
+echo "Granting storage.objectAdmin to runner SA..."
 gsutil iam ch \
   "serviceAccount:netgenius-runner@${PROJECT_ID}.iam.gserviceaccount.com:roles/storage.objectAdmin" \
   "gs://$BUCKET_NAME"
 
 # Orchestrator SA can read from GCS
+echo "Granting storage.objectViewer to orchestrator SA..."
 gsutil iam ch \
   "serviceAccount:netgenius-orchestrator@${PROJECT_ID}.iam.gserviceaccount.com:roles/storage.objectViewer" \
   "gs://$BUCKET_NAME"
