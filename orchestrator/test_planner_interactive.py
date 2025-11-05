@@ -100,21 +100,39 @@ async def test_interactive_planner():
                             agent_response += part.text
                 console.print(f"[green]Agent:[/green] {event.content}\n")
 
-        # Check if ExerciseSpec is ready
-        session = await session_service.get_session(
-            app_name=app_name,
-            user_id=user_id,
-            session_id=session_id
-        )
+        # Check if response contains valid JSON (exercise spec)
+        exercise_spec = None
+        if agent_response:
+            # Try to find and parse JSON in the response
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', agent_response)
+            if json_match:
+                try:
+                    import json
+                    potential_spec = json.loads(json_match.group())
+                    # Verify it has the required fields for ExerciseSpec
+                    if all(key in potential_spec for key in ['title', 'objectives', 'constraints', 'level', 'prerequisites']):
+                        exercise_spec = potential_spec
+                        console.print("\n[bold green]✓ Exercise specification complete![/bold green]\n")
+                        console.print(
+                            Panel(
+                                json.dumps(exercise_spec, indent=2),
+                                title="ExerciseSpec",
+                                border_style="green"
+                            )
+                        )
+                except json.JSONDecodeError:
+                    pass  # Not valid JSON, continue conversation
 
-        # Debug: show what's in session state
-        console.print(f"[dim]Session state keys: {list(session.state.keys())}[/dim]")
+        # If we got a complete spec, we're done
+        if exercise_spec:
+            return exercise_spec
 
-        # Multi-turn loop
-        max_turns = 5  # Prevent infinite loops
+        # Multi-turn loop (only if we don't have a spec yet)
+        max_turns = 5
         turn_count = 0
 
-        while "exercise_spec" not in session.state and turn_count < max_turns:
+        while exercise_spec is None and turn_count < max_turns:
             turn_count += 1
 
             # Get user's answers
@@ -139,33 +157,40 @@ async def test_interactive_planner():
                 new_message=message
             ))
 
-            # Print agent's response
+            # Print agent's response and check for JSON
+            agent_response = ""
             for event in events:
                 if hasattr(event, 'content') and event.content:
+                    if hasattr(event.content, 'parts'):
+                        for part in event.content.parts:
+                            if hasattr(part, 'text'):
+                                agent_response += part.text
                     console.print(f"[green]Agent:[/green] {event.content}\n")
 
-            # Check if done
-            session = await session_service.get_session(
-                app_name=app_name,
-                user_id=user_id,
-                session_id=session_id
-            )
+            # Check if response contains valid JSON
+            if agent_response:
+                json_match = re.search(r'\{[\s\S]*\}', agent_response)
+                if json_match:
+                    try:
+                        potential_spec = json.loads(json_match.group())
+                        if all(key in potential_spec for key in ['title', 'objectives', 'constraints', 'level', 'prerequisites']):
+                            exercise_spec = potential_spec
+                            console.print("\n[bold green]✓ Exercise specification complete![/bold green]\n")
+                            console.print(
+                                Panel(
+                                    json.dumps(exercise_spec, indent=2),
+                                    title="ExerciseSpec",
+                                    border_style="green"
+                                )
+                            )
+                            break
+                    except json.JSONDecodeError:
+                        pass
 
-            if "exercise_spec" in session.state:
-                console.print("\n[bold green]✓ Exercise specification complete![/bold green]\n")
-                console.print(
-                    Panel(
-                        json.dumps(session.state["exercise_spec"], indent=2),
-                        title="ExerciseSpec",
-                        border_style="green"
-                    )
-                )
-                break
-
-        if turn_count >= max_turns and "exercise_spec" not in session.state:
+        if turn_count >= max_turns and exercise_spec is None:
             console.print("[yellow]Maximum turns reached. Ending conversation.[/yellow]")
 
-        return session.state.get("exercise_spec")
+        return exercise_spec
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] {e}")

@@ -136,5 +136,5 @@ Please provide your answers so I can create the lab specification.
 
 (Then wait for user response in next turn)
 """,
-    output_key="exercise_spec",
+    # Note: No output_key - we'll manually extract JSON when agent is ready
 )
