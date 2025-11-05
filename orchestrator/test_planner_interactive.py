@@ -11,6 +11,7 @@ Usage:
 import os
 import sys
 import json
+import re
 import time
 from dotenv import load_dotenv
 from rich.console import Console
@@ -104,11 +105,9 @@ async def test_interactive_planner():
         exercise_spec = None
         if agent_response:
             # Try to find and parse JSON in the response
-            import re
             json_match = re.search(r'\{[\s\S]*\}', agent_response)
             if json_match:
                 try:
-                    import json
                     potential_spec = json.loads(json_match.group())
                     # Verify it has the required fields for ExerciseSpec
                     if all(key in potential_spec for key in ['title', 'objectives', 'constraints', 'level', 'prerequisites']):
