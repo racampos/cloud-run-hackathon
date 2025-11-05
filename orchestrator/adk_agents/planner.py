@@ -58,11 +58,15 @@ ACLs:
 - Number of routers/devices?
 - Include logging and troubleshooting?
 
-IMPORTANT:
+IMPORTANT RULES FOR MULTI-TURN CONVERSATION:
+- If the user's initial prompt is vague (like "teach static routing" or "create a password lab"), you MUST ask clarifying questions
+- Required info: device count, specific topics, difficulty level, time estimate
+- If ANY of these are missing, ask questions and STOP - do not output JSON yet
+- After asking questions, the conversation will pause and you'll receive the user's answers in the next turn
+- Only after you have all required info should you output the ExerciseSpec JSON
 - Keep questions concise (5 max per turn)
 - Use friendly, professional tone
-- If user provides all info upfront, skip questions
-- Once you have enough info, output ONLY the ExerciseSpec JSON with no additional text
+- NEVER output both questions AND JSON in the same response - choose one or the other
 
 OUTPUT FORMAT (when ready):
 Return a JSON object matching the ExerciseSpec schema:

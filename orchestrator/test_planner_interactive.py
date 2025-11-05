@@ -90,8 +90,14 @@ async def test_interactive_planner():
         ))
 
         # Print agent's response (questions or ExerciseSpec)
+        agent_response = ""
         for event in events:
             if hasattr(event, 'content') and event.content:
+                # Extract text from Content
+                if hasattr(event.content, 'parts'):
+                    for part in event.content.parts:
+                        if hasattr(part, 'text'):
+                            agent_response += part.text
                 console.print(f"[green]Agent:[/green] {event.content}\n")
 
         # Check if ExerciseSpec is ready
@@ -100,6 +106,9 @@ async def test_interactive_planner():
             user_id=user_id,
             session_id=session_id
         )
+
+        # Debug: show what's in session state
+        console.print(f"[dim]Session state keys: {list(session.state.keys())}[/dim]")
 
         # Multi-turn loop
         max_turns = 5  # Prevent infinite loops
