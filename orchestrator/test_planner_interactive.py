@@ -1,0 +1,138 @@
+#!/usr/bin/env python3
+"""Test the Interactive Planner Agent with multi-turn Q&A.
+
+This script demonstrates the Deep Research-style interaction where the agent
+asks clarifying questions before generating the complete ExerciseSpec.
+
+Usage:
+    python test_planner_interactive.py
+"""
+
+import os
+import sys
+import json
+import time
+from dotenv import load_dotenv
+from rich.console import Console
+from rich.panel import Panel
+from google.adk.runner import Runner
+from google.adk.session import InMemorySessionService
+
+# Load environment variables
+load_dotenv()
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(__file__))
+
+from adk_agents.planner import planner_agent
+
+console = Console()
+
+
+def test_interactive_planner():
+    """Test the interactive planner with multi-turn Q&A."""
+
+    # Check for API key
+    if not os.getenv("GOOGLE_API_KEY"):
+        console.print("[red]Error: GOOGLE_API_KEY not found in .env file[/red]")
+        console.print("Please add your Gemini API key to orchestrator/.env")
+        console.print("Get your key from: https://aistudio.google.com/app/apikey")
+        return
+
+    console.print(
+        Panel.fit(
+            "[bold cyan]NetGenius Interactive Lab Planner[/bold cyan]\n"
+            "Multi-Turn Q&A with ADK",
+            border_style="cyan",
+        )
+    )
+
+    # Initialize ADK session
+    session_service = InMemorySessionService()
+    runner = Runner(
+        agent=planner_agent,
+        app_name="netgenius",
+        session_service=session_service
+    )
+
+    user_id = "instructor"
+    session_id = f"planning_{int(time.time())}"
+
+    console.print("\n[dim]This agent will ask clarifying questions about your lab requirements.[/dim]\n")
+
+    # Turn 1: Initial prompt
+    initial_prompt = input("What lab would you like to create? ")
+
+    console.print("\n[cyan]Agent is thinking...[/cyan]\n")
+
+    try:
+        events = list(runner.run(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=initial_prompt
+        ))
+
+        # Print agent's response (questions or ExerciseSpec)
+        for event in events:
+            if hasattr(event, 'content') and event.content:
+                console.print(f"[green]Agent:[/green] {event.content}\n")
+
+        # Check if ExerciseSpec is ready
+        session = session_service.get_session(user_id, session_id)
+
+        # Multi-turn loop
+        max_turns = 5  # Prevent infinite loops
+        turn_count = 0
+
+        while "exercise_spec" not in session.state and turn_count < max_turns:
+            turn_count += 1
+
+            # Get user's answers
+            user_response = input("\nYour answer: ")
+
+            if not user_response.strip():
+                console.print("[yellow]Please provide an answer to continue.[/yellow]")
+                continue
+
+            console.print("\n[cyan]Agent is thinking...[/cyan]\n")
+
+            # Continue conversation (session preserves history)
+            events = list(runner.run(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=user_response
+            ))
+
+            # Print agent's response
+            for event in events:
+                if hasattr(event, 'content') and event.content:
+                    console.print(f"[green]Agent:[/green] {event.content}\n")
+
+            # Check if done
+            session = session_service.get_session(user_id, session_id)
+
+            if "exercise_spec" in session.state:
+                console.print("\n[bold green]✓ Exercise specification complete![/bold green]\n")
+                console.print(
+                    Panel(
+                        json.dumps(session.state["exercise_spec"], indent=2),
+                        title="ExerciseSpec",
+                        border_style="green"
+                    )
+                )
+                break
+
+        if turn_count >= max_turns and "exercise_spec" not in session.state:
+            console.print("[yellow]Maximum turns reached. Ending conversation.[/yellow]")
+
+        return session.state.get("exercise_spec")
+
+    except Exception as e:
+        console.print(f"\n[red]Error:[/red] {e}")
+        import traceback
+        console.print(traceback.format_exc())
+        return None
+
+
+if __name__ == "__main__":
+    test_interactive_planner()
