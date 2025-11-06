@@ -165,18 +165,32 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
 
             # Save draft lab guide
             if "draft_lab_guide" in session.state:
+                draft_guide = session.state["draft_lab_guide"]
+
+                # Parse if it's a JSON string
+                if isinstance(draft_guide, str):
+                    try:
+                        draft_guide = json.loads(draft_guide)
+                    except json.JSONDecodeError:
+                        # It's text but not JSON, save as-is
+                        pass
+
                 guide_json_file = output_dir / "draft_lab_guide.json"
                 with open(guide_json_file, "w") as f:
-                    json.dump(session.state["draft_lab_guide"], f, indent=2)
+                    if isinstance(draft_guide, dict):
+                        json.dump(draft_guide, f, indent=2)
+                    else:
+                        f.write(str(draft_guide))
                 console.print(f"[green]✓ Draft lab guide (JSON) saved:[/green] {guide_json_file}")
 
-                # Save markdown version
-                guide_md = session.state["draft_lab_guide"].get("markdown", "")
-                if guide_md:
-                    guide_md_file = output_dir / "draft_lab_guide.md"
-                    with open(guide_md_file, "w") as f:
-                        f.write(guide_md)
-                    console.print(f"[green]✓ Draft lab guide (Markdown) saved:[/green] {guide_md_file}")
+                # Save markdown version if available
+                if isinstance(draft_guide, dict):
+                    guide_md = draft_guide.get("markdown", "")
+                    if guide_md:
+                        guide_md_file = output_dir / "draft_lab_guide.md"
+                        with open(guide_md_file, "w") as f:
+                            f.write(guide_md)
+                        console.print(f"[green]✓ Draft lab guide (Markdown) saved:[/green] {guide_md_file}")
 
             # Save validation result
             if "validation_result" in session.state:
