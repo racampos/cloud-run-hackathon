@@ -258,18 +258,13 @@ class ValidatorAgent(BaseAgent):
         client = run_v2.JobsAsyncClient(credentials=credentials)
         job_path = f"projects/{self.project_id}/locations/{self.region}/jobs/{self.job_name}"
 
-        # Create execution request with environment override
+        # Create execution request with args override for --spec flag
         request = run_v2.RunJobRequest(
             name=job_path,
             overrides=run_v2.RunJobRequest.Overrides(
                 container_overrides=[
                     run_v2.RunJobRequest.Overrides.ContainerOverride(
-                        env=[
-                            run_v2.EnvVar(
-                                name="SPEC_GCS_PATH",
-                                value=f"gs://{self.bucket_name}/{spec_path}"
-                            )
-                        ]
+                        args=["--spec", f"gs://{self.bucket_name}/{spec_path}"]
                     )
                 ]
             )
