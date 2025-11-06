@@ -59,13 +59,39 @@ class ValidatorAgent(BaseAgent):
             )
 
         # 1. Read inputs from session state
+        import json
+        import re
+
         draft_guide = context.session.state.get("draft_lab_guide")
         design_output = context.session.state.get("design_output")
 
         if not draft_guide or not design_output:
+            logger.error(
+                "missing_session_state",
+                has_draft_guide=bool(draft_guide),
+                has_design_output=bool(design_output),
+                state_keys=list(context.session.state.keys())
+            )
             raise ValueError(
                 "Missing required inputs. Need draft_lab_guide and design_output in session state."
             )
+
+        # Parse JSON strings if needed (agents may output JSON wrapped in markdown)
+        if isinstance(draft_guide, str):
+            # Strip markdown code fences if present
+            if draft_guide.strip().startswith("```"):
+                lines = draft_guide.strip().split("\n")
+                draft_guide = "\n".join(lines[1:-1])
+            draft_guide = json.loads(draft_guide)
+            logger.info("parsed_draft_guide_from_string")
+
+        if isinstance(design_output, str):
+            # Strip markdown code fences if present
+            if design_output.strip().startswith("```"):
+                lines = design_output.strip().split("\n")
+                design_output = "\n".join(lines[1:-1])
+            design_output = json.loads(design_output)
+            logger.info("parsed_design_output_from_string")
 
         # 2. Convert to headless runner payload
         payload = self._convert_payload(draft_guide, design_output)
