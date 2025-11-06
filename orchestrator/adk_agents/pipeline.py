@@ -41,7 +41,3 @@ def create_lab_pipeline(include_validation: bool = True) -> SequentialAgent:
                 author_agent
             ]
         )
-
-
-# Default pipeline (with validation)
-lab_creation_pipeline = create_lab_pipeline(include_validation=True)
