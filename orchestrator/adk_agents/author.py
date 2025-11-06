@@ -159,6 +159,8 @@ IMPORTANT:
 - Use full show commands: `show running-config` NOT `show run | include`
 - Verification steps should use show commands students can actually run
 - Markdown is generated from the structured JSON
+- OUTPUT FORMAT: Return ONLY the raw JSON object, NO markdown code fences, NO ```json wrapper
+- Your final response must be pure JSON starting with { and ending with }
 
 TOOLS AVAILABLE:
 - lint_cli(device_type: str, commands: list[dict], sequence_mode: str, stop_on_error: bool) -> dict

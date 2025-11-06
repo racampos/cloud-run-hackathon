@@ -135,6 +135,8 @@ IMPORTANT:
 - Maximum 3 retry attempts per validation
 - Initial configs should be minimal but establish connectivity
 - Target configs should show all objectives completed
+- OUTPUT FORMAT: Return ONLY the raw JSON object, NO markdown code fences, NO ```json wrapper
+- Your final response must be pure JSON starting with { and ending with }
 
 TOOLS AVAILABLE:
 - lint_topology(topology_yaml: str) -> dict with {ok: bool, issues: list}
