@@ -209,6 +209,11 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
                 # Parse if it's a JSON string
                 if isinstance(draft_guide, str):
                     try:
+                        # Strip markdown code fences if present
+                        if draft_guide.strip().startswith("```"):
+                            lines = draft_guide.strip().split("\n")
+                            # Remove first line (```json or ```) and last line (```)
+                            draft_guide = "\n".join(lines[1:-1])
                         draft_guide = json.loads(draft_guide)
                     except json.JSONDecodeError:
                         # It's text but not JSON, save as-is
