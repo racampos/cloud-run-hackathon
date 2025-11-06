@@ -180,6 +180,29 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
             session_id=session_id
         )
 
+        # Manual fallback: Extract missing outputs from events if not in session.state
+        # This handles cases where LLMs wrap JSON in markdown despite instructions
+        import re
+        if "design_output" not in session.state or "exercise_spec" not in session.state:
+            for event in events:
+                if hasattr(event, 'content') and event.content:
+                    text = event.content
+                    # Try to find JSON in markdown code fences
+                    json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+                    if json_match:
+                        try:
+                            parsed = json.loads(json_match.group(1))
+                            # Detect which output this is by looking for key fields
+                            if "topology_yaml" in parsed and "design_output" not in session.state:
+                                session.state["design_output"] = parsed
+                                logger.info("manual_extraction_design_output")
+                            elif "title" in parsed and "objectives" in parsed and "constraints" in parsed:
+                                if "exercise_spec" not in session.state:
+                                    session.state["exercise_spec"] = parsed
+                                    logger.info("manual_extraction_exercise_spec")
+                        except json.JSONDecodeError:
+                            pass
+
         # Pipeline completed - check what was generated
         if session.state:
             console.print("\n[bold green]✓ Lab creation pipeline completed![/bold green]\n")
