@@ -60,6 +60,13 @@ VERIFICATION BEST PRACTICES:
 - For connectivity: `ping <ip>` between networks
 - For protocols: `show ospf neighbor`, `show eigrp neighbors`, etc.
 
+CRITICAL SIMULATOR CONSTRAINTS:
+- **DO NOT use pipe filters in show commands** (e.g., NO `show run | include`, NO `show run | section`)
+- The Containerlab simulator does NOT support `|` (pipe) in CLI commands
+- Use full commands only: `show running-config`, `show ip interface brief`, etc.
+- Students will manually search through output rather than using filters
+- This applies to ALL verification commands - never use `| include`, `| section`, `| begin`, etc.
+
 COMMAND STEP TYPES:
 - cmd: Configuration command students type
 - verify: Verification command (show, ping) students run
@@ -148,6 +155,8 @@ IMPORTANT:
 - Only lint "cmd" type steps (not "verify", "output", "note")
 - Commands must be in correct sequence (enter config mode first)
 - Include "exit" or "end" to return to privileged mode
+- NEVER use pipe filters (|) in ANY commands - simulator doesn't support them
+- Use full show commands: `show running-config` NOT `show run | include`
 - Verification steps should use show commands students can actually run
 - Markdown is generated from the structured JSON
 
