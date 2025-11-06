@@ -53,6 +53,45 @@ def create(prompt: str, verbose: bool, dry_run: bool, output: str):
     asyncio.run(_create_async(prompt, verbose, dry_run, output))
 
 
+def _write_step(f, step: dict, step_num: int = None):
+    """Helper to write a step to markdown file."""
+    step_type = step.get("type", "note")
+    value = step.get("value", "")
+    description = step.get("description", "")
+
+    if step_type == "cmd":
+        if step_num:
+            f.write(f"{step_num}. **Command:** `{value}`\n")
+        else:
+            f.write(f"**Command:** `{value}`\n")
+        if description:
+            f.write(f"   - {description}\n\n")
+        else:
+            f.write("\n")
+    elif step_type == "verify":
+        if step_num:
+            f.write(f"{step_num}. **Verify:** `{value}`\n")
+        else:
+            f.write(f"**Verify:** `{value}`\n")
+        if description:
+            f.write(f"   - {description}\n\n")
+        else:
+            f.write("\n")
+    elif step_type == "output":
+        f.write("**Expected Output:**\n```\n")
+        f.write(value)
+        f.write("\n```\n")
+        if description:
+            f.write(f"*{description}*\n\n")
+        else:
+            f.write("\n")
+    elif step_type == "note":
+        if step_num:
+            f.write(f"{step_num}. **Note:** {value}\n\n")
+        else:
+            f.write(f"> **Note:** {value}\n\n")
+
+
 async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
     """Async implementation of create command."""
 
@@ -183,14 +222,78 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
                         f.write(str(draft_guide))
                 console.print(f"[green]✓ Draft lab guide (JSON) saved:[/green] {guide_json_file}")
 
-                # Save markdown version if available
+                # Generate markdown version from structured JSON
                 if isinstance(draft_guide, dict):
-                    guide_md = draft_guide.get("markdown", "")
-                    if guide_md:
-                        guide_md_file = output_dir / "draft_lab_guide.md"
-                        with open(guide_md_file, "w") as f:
-                            f.write(guide_md)
-                        console.print(f"[green]✓ Draft lab guide (Markdown) saved:[/green] {guide_md_file}")
+                    guide_md_file = output_dir / "draft_lab_guide.md"
+                    with open(guide_md_file, "w") as f:
+                        # Title and metadata
+                        f.write(f"# {draft_guide.get('title', 'Lab Guide')}\n\n")
+                        f.write(f"**Estimated Time:** {draft_guide.get('estimated_time_minutes', 'N/A')} minutes\n\n")
+
+                        # Objectives
+                        if "objectives" in draft_guide:
+                            f.write("## Learning Objectives\n\n")
+                            for obj in draft_guide["objectives"]:
+                                f.write(f"- {obj}\n")
+                            f.write("\n")
+
+                        # Prerequisites
+                        if "prerequisites" in draft_guide:
+                            f.write("## Prerequisites\n\n")
+                            for prereq in draft_guide["prerequisites"]:
+                                f.write(f"- {prereq}\n")
+                            f.write("\n")
+
+                        # Topology
+                        if "topology_description" in draft_guide:
+                            f.write("## Network Topology\n\n")
+                            f.write(f"{draft_guide['topology_description']}\n\n")
+
+                        # Initial Setup
+                        if "initial_setup" in draft_guide:
+                            f.write("## Initial Setup\n\n")
+                            for step in draft_guide["initial_setup"]:
+                                _write_step(f, step)
+                            f.write("\n")
+
+                        # Device Sections
+                        if "device_sections" in draft_guide:
+                            for device in draft_guide["device_sections"]:
+                                f.write(f"## Device: {device.get('device_name', 'Unknown')}\n\n")
+                                f.write(f"**Platform:** {device.get('platform', 'N/A')}  \n")
+                                f.write(f"**Role:** {device.get('role', 'N/A')}\n\n")
+
+                                # IP table
+                                if device.get("ip_table"):
+                                    f.write("### IP Addressing\n\n")
+                                    f.write("| Interface | IP Address |\n")
+                                    f.write("|-----------|------------|\n")
+                                    for intf, ip in device["ip_table"].items():
+                                        f.write(f"| {intf} | {ip} |\n")
+                                    f.write("\n")
+
+                                # Steps
+                                if "steps" in device:
+                                    f.write("### Configuration Steps\n\n")
+                                    for i, step in enumerate(device["steps"], 1):
+                                        _write_step(f, step, step_num=i)
+                                    f.write("\n")
+
+                        # Final Verification
+                        if "final_verification" in draft_guide:
+                            f.write("## Final Verification\n\n")
+                            for step in draft_guide["final_verification"]:
+                                _write_step(f, step)
+                            f.write("\n")
+
+                        # Troubleshooting
+                        if "troubleshooting_tips" in draft_guide:
+                            f.write("## Troubleshooting Tips\n\n")
+                            for tip in draft_guide["troubleshooting_tips"]:
+                                f.write(f"- {tip}\n")
+                            f.write("\n")
+
+                    console.print(f"[green]✓ Draft lab guide (Markdown) saved:[/green] {guide_md_file}")
 
             # Save validation result
             if "validation_result" in session.state:
