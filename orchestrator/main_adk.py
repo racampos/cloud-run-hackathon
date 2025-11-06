@@ -134,53 +134,15 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
             if hasattr(event, 'content') and event.content:
                 console.print(f"\n[green]{event.content}[/green]\n")
 
-        # Check session state
+        # Get final session state
         session = await session_service.get_session(
             app_name=app_name,
             user_id=user_id,
             session_id=session_id
         )
 
-        # Multi-turn Q&A loop (for Planner agent)
-        max_turns = 5
-        turn_count = 0
-
-        while "exercise_spec" not in session.state and turn_count < max_turns:
-            turn_count += 1
-
-            # Get user response
-            user_response = input("\nYour answer: ")
-            if not user_response.strip():
-                console.print("[yellow]Please provide an answer.[/yellow]")
-                continue
-
-            console.print("\n[cyan]Processing...[/cyan]\n")
-
-            # Create message from user response
-            message = types.Content(
-                parts=[types.Part(text=user_response)],
-                role="user"
-            )
-
-            # Continue conversation
-            events = list(runner.run(
-                user_id=user_id,
-                session_id=session_id,
-                new_message=message
-            ))
-
-            for event in events:
-                if hasattr(event, 'content') and event.content:
-                    console.print(f"\n[green]{event.content}[/green]\n")
-
-            session = await session_service.get_session(
-                app_name=app_name,
-                user_id=user_id,
-                session_id=session_id
-            )
-
-        # Pipeline completed
-        if "exercise_spec" in session.state:
+        # Pipeline completed - check what was generated
+        if session.state:
             console.print("\n[bold green]✓ Lab creation pipeline completed![/bold green]\n")
 
             # Save outputs
