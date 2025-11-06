@@ -45,35 +45,62 @@ class ValidatorAgent(BaseAgent):
         object.__setattr__(self, 'job_name', "headless-runner")
 
     async def run_async(self, context: InvocationContext):
-        """Execute headless validation workflow."""
+        """Execute headless validation workflow.
+
+        This is an async generator that yields events for ADK pipeline integration.
+        """
+        from google.genai import types
+
         logger.info("validator_started")
+
+        # Yield starting event
+        yield types.Content(
+            parts=[types.Part(text="Starting headless validation...")],
+            role="model"
+        )
 
         if not CLOUD_RUN_AVAILABLE:
             logger.error("cloud_run_not_available")
-            raise ImportError(
+            error_msg = (
                 "Cloud Run libraries not available. Install with: "
                 "pip install google-cloud-run google-auth"
             )
+            yield types.Content(
+                parts=[types.Part(text=f"Error: {error_msg}")],
+                role="model"
+            )
+            raise ImportError(error_msg)
 
         # 1. Read inputs from session state
         draft_guide = context.session.state.get("draft_lab_guide")
         design_output = context.session.state.get("design_output")
 
         if not draft_guide or not design_output:
-            raise ValueError(
-                "Missing required inputs. Need draft_lab_guide and design_output in session state."
+            error_msg = "Missing required inputs. Need draft_lab_guide and design_output in session state."
+            yield types.Content(
+                parts=[types.Part(text=f"Error: {error_msg}")],
+                role="model"
             )
+            raise ValueError(error_msg)
 
         # 2. Convert to headless runner payload
         payload = self._convert_payload(draft_guide, design_output)
         execution_id = payload["exercise_id"]
 
         logger.info("validator_payload_created", execution_id=execution_id)
+        yield types.Content(
+            parts=[types.Part(text=f"Created validation payload (ID: {execution_id})")],
+            role="model"
+        )
 
         # 3. Submit Cloud Run Job
         try:
             await self._submit_job(payload)
             logger.info("validator_job_submitted", execution_id=execution_id)
+            yield types.Content(
+                parts=[types.Part(text=f"Submitted Cloud Run job for validation")],
+                role="model"
+            )
         except Exception as e:
             logger.error("validator_job_submit_failed", error=str(e))
             context.session.state["validation_result"] = {
@@ -82,9 +109,17 @@ class ValidatorAgent(BaseAgent):
                 "summary": {"error": f"Job submission failed: {str(e)}"},
                 "error": str(e)
             }
+            yield types.Content(
+                parts=[types.Part(text=f"Job submission failed: {str(e)}")],
+                role="model"
+            )
             return
 
         # 4. Poll for completion
+        yield types.Content(
+            parts=[types.Part(text="Waiting for validation to complete (max 10 minutes)...")],
+            role="model"
+        )
         try:
             success = await self._poll_job(execution_id, max_wait_seconds=600)
             logger.info("validator_job_completed", execution_id=execution_id, success=success)
@@ -96,9 +131,17 @@ class ValidatorAgent(BaseAgent):
                 "summary": {"error": f"Job polling failed: {str(e)}"},
                 "error": str(e)
             }
+            yield types.Content(
+                parts=[types.Part(text=f"Job polling failed: {str(e)}")],
+                role="model"
+            )
             return
 
         # 5. Fetch artifacts from GCS
+        yield types.Content(
+            parts=[types.Part(text="Fetching validation artifacts from GCS...")],
+            role="model"
+        )
         try:
             artifacts = await fetch_validation_artifacts(
                 execution_id=execution_id,
@@ -118,6 +161,10 @@ class ValidatorAgent(BaseAgent):
                 "summary": {"error": f"Artifact fetch failed: {str(e)}"},
                 "error": str(e)
             }
+            yield types.Content(
+                parts=[types.Part(text=f"Artifact fetch failed: {str(e)}")],
+                role="model"
+            )
             return
 
         # 6. Write result to session state
@@ -133,6 +180,13 @@ class ValidatorAgent(BaseAgent):
             "validator_completed",
             execution_id=execution_id,
             success=context.session.state["validation_result"]["success"]
+        )
+
+        # Yield completion event
+        validation_status = "PASSED" if context.session.state["validation_result"]["success"] else "FAILED"
+        yield types.Content(
+            parts=[types.Part(text=f"Validation {validation_status} (ID: {execution_id})")],
+            role="model"
         )
 
     def _convert_payload(self, draft_guide: dict, design_output: dict) -> dict:
