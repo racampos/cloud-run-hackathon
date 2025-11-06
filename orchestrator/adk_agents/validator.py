@@ -236,13 +236,44 @@ class ValidatorAgent(BaseAgent):
         Raises:
             Exception if job submission fails
         """
-        credentials, _ = default()
-        client = run_v2.JobsAsyncClient(credentials=credentials)
+        from google.cloud import storage
+        import json as json_lib
 
+        execution_id = payload["exercise_id"]
+
+        # 1. Upload payload to GCS
+        credentials, _ = default()
+        storage_client = storage.Client(credentials=credentials, project=self.project_id)
+        bucket = storage_client.bucket(self.bucket_name)
+
+        spec_path = f"{execution_id}/spec.json"
+        blob = bucket.blob(spec_path)
+        blob.upload_from_string(
+            json_lib.dumps(payload, indent=2),
+            content_type="application/json"
+        )
+        logger.info("validator_payload_uploaded", execution_id=execution_id, path=spec_path)
+
+        # 2. Submit Cloud Run Job with spec path as environment variable
+        client = run_v2.JobsAsyncClient(credentials=credentials)
         job_path = f"projects/{self.project_id}/locations/{self.region}/jobs/{self.job_name}"
 
-        # Create execution request
-        request = run_v2.RunJobRequest(name=job_path)
+        # Create execution request with environment override
+        request = run_v2.RunJobRequest(
+            name=job_path,
+            overrides=run_v2.RunJobRequest.Overrides(
+                container_overrides=[
+                    run_v2.RunJobRequest.Overrides.ContainerOverride(
+                        env=[
+                            run_v2.EnvVar(
+                                name="SPEC_GCS_PATH",
+                                value=f"gs://{self.bucket_name}/{spec_path}"
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
 
         # Execute job (non-blocking)
         operation = await client.run_job(request=request)
@@ -250,7 +281,8 @@ class ValidatorAgent(BaseAgent):
         logger.info(
             "cloud_run_job_started",
             job=self.job_name,
-            execution_id=payload["exercise_id"]
+            execution_id=execution_id,
+            spec_path=f"gs://{self.bucket_name}/{spec_path}"
         )
 
     async def _poll_job(self, execution_id: str, max_wait_seconds: int = 600) -> bool:
