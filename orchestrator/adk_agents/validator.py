@@ -254,20 +254,27 @@ class ValidatorAgent(BaseAgent):
         )
         logger.info("validator_payload_uploaded", execution_id=execution_id, path=spec_path)
 
-        # 2. Submit Cloud Run Job with spec path as environment variable
+        # 2. Submit Cloud Run Job with spec path via environment variable
+        # Cloud Run Jobs v2 API doesn't reliably support args overrides,
+        # so we use an environment variable that the headless-runner can read
         client = run_v2.JobsAsyncClient(credentials=credentials)
         job_path = f"projects/{self.project_id}/locations/{self.region}/jobs/{self.job_name}"
 
-        # Create execution request with args override for --spec flag
+        # Create execution request with environment variable override
+        override = run_v2.RunJobRequest.Overrides()
+        container_override = run_v2.RunJobRequest.Overrides.ContainerOverride()
+
+        # Add environment variable for spec path
+        env_var = run_v2.EnvVar()
+        env_var.name = "SPEC_GCS_PATH"
+        env_var.value = f"gs://{self.bucket_name}/{spec_path}"
+        container_override.env = [env_var]
+
+        override.container_overrides = [container_override]
+
         request = run_v2.RunJobRequest(
             name=job_path,
-            overrides=run_v2.RunJobRequest.Overrides(
-                container_overrides=[
-                    run_v2.RunJobRequest.Overrides.ContainerOverride(
-                        args=["--spec", f"gs://{self.bucket_name}/{spec_path}"]
-                    )
-                ]
-            )
+            overrides=override
         )
 
         # Execute job (non-blocking)
