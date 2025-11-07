@@ -46,12 +46,15 @@ LAB GUIDE STRUCTURE:
 3. **Topology Diagram**: ASCII art or description of network
 4. **Initial Setup**: How to access devices, verify baseline
 5. **Device Sections**: Per-device configuration steps
-   - Device name and role
+   - Device name and role (MUST use UPPERCASE device names matching design_output: R1, R2, etc.)
    - IP addressing table
    - Configuration steps (numbered)
    - Verification steps (show commands)
 6. **Final Verification**: End-to-end connectivity tests
 7. **Troubleshooting Tips**: Common issues and solutions
+
+CRITICAL: Device names in device_sections MUST exactly match the uppercase names from design_output (e.g., R1, R2, R3, SW1).
+This is required for proper validation - lowercase names (r1, r2) will cause validation failures.
 
 VERIFICATION BEST PRACTICES:
 - After interface config: `show ip interface brief`
@@ -82,7 +85,7 @@ EXAMPLE OUTPUT STRUCTURE (DraftLabGuide):
   "topology_description": "Two Cisco 2911 routers connected via GigabitEthernet0/0",
   "device_sections": [
     {
-      "device_name": "r1",
+      "device_name": "R1",
       "platform": "cisco_2911",
       "role": "Router 1 - Left side",
       "ip_table": {

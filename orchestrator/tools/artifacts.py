@@ -72,16 +72,16 @@ async def fetch_validation_artifacts(
     storage_client = storage.Client(project=project_id)
     bucket = storage_client.bucket(bucket_name)
 
-    # Fetch summary.json (required)
-    summary_blob = bucket.blob(f"{execution_id}/summary.json")
-    if not summary_blob.exists():
+    # Fetch results.json (required) - headless-runner writes results.json, not summary.json
+    results_blob = bucket.blob(f"{execution_id}/results.json")
+    if not results_blob.exists():
         raise FileNotFoundError(
-            f"Summary not found in GCS: gs://{bucket_name}/{execution_id}/summary.json"
+            f"Results not found in GCS: gs://{bucket_name}/{execution_id}/results.json"
         )
 
-    summary_json = summary_blob.download_as_text()
-    summary = json.loads(summary_json)
-    logger.info("summary_loaded", status=summary.get("status"), execution_id=execution_id)
+    results_json = results_blob.download_as_text()
+    summary = json.loads(results_json)
+    logger.info("results_loaded", ok=summary.get("ok"), execution_id=execution_id)
 
     # Fetch execution.log (optional)
     logs = None

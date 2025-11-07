@@ -69,8 +69,10 @@ STEP 3: VALIDATE topology by calling lint_topology(topology_yaml)
 - If it returns errors, fix and retry (max 3 attempts)
 
 STEP 4: Create initial configs (baseline connectivity)
+- ALWAYS start with "enable" command to enter privileged exec mode
+- Then use "configure terminal" before any configuration commands
 - Extract ONLY the commands from device configs (not full config blocks)
-- Minimal commands: hostname, interface IPs, no shutdown
+- Minimal commands: enable, configure terminal, hostname, interface IPs, no shutdown, end
 - Use realistic RFC 1918 addressing
 - Device keys MUST match topology device names (uppercase: R1, R2, etc.)
 
@@ -99,12 +101,12 @@ REQUIRED JSON STRUCTURE:
   "topology_yaml": "devices:\\n  - type: router\\n    name: R1\\n    hardware: cisco_2911\\n    device_id: c44b6160-930d-419b-805a-111111111111\\n    config: |\\n      hostname R1\\n      interface GigabitEthernet0/0\\n        ip address 192.168.1.1 255.255.255.0\\n        no shutdown\\nconnections:\\n  - interfaces:\\n      - device: R1\\n        interface: GigabitEthernet0/0\\n      - device: R2\\n        interface: GigabitEthernet0/0",
   "platforms": {"R1": "cisco_2911", "R2": "cisco_2911"},
   "initial_configs": {
-    "R1": ["configure terminal", "hostname R1", "interface GigabitEthernet0/0", "ip address 192.168.1.1 255.255.255.0", "no shutdown", "end"],
-    "R2": ["configure terminal", "hostname R2", "interface GigabitEthernet0/0", "ip address 192.168.1.2 255.255.255.0", "no shutdown", "end"]
+    "R1": ["enable", "configure terminal", "hostname R1", "interface GigabitEthernet0/0", "ip address 192.168.1.1 255.255.255.0", "no shutdown", "end"],
+    "R2": ["enable", "configure terminal", "hostname R2", "interface GigabitEthernet0/0", "ip address 192.168.1.2 255.255.255.0", "no shutdown", "end"]
   },
   "target_configs": {
-    "R1": ["configure terminal", "ip route 10.2.2.0 255.255.255.0 192.168.1.2", "end"],
-    "R2": ["configure terminal", "ip route 10.1.1.0 255.255.255.0 192.168.1.1", "end"]
+    "R1": ["enable", "configure terminal", "ip route 10.2.2.0 255.255.255.0 192.168.1.2", "end"],
+    "R2": ["enable", "configure terminal", "ip route 10.1.1.0 255.255.255.0 192.168.1.1", "end"]
   },
   "lint_results": {
     "topology": {"ok": true},
