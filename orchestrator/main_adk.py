@@ -46,11 +46,12 @@ def cli():
 @click.option("--prompt", help="Initial lab prompt (interactive if not provided)")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 @click.option("--dry-run", is_flag=True, help="Skip headless validation")
+@click.option("--no-rca", is_flag=True, help="Disable RCA retry loop (validation failures will not auto-retry)")
 @click.option("--output", default="./output", help="Output directory for artifacts")
-def create(prompt: str, verbose: bool, dry_run: bool, output: str):
+def create(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, output: str):
     """Create a new lab using ADK pipeline with multi-turn Q&A."""
     import asyncio
-    asyncio.run(_create_async(prompt, verbose, dry_run, output))
+    asyncio.run(_create_async(prompt, verbose, dry_run, no_rca, output))
 
 
 def _write_step(f, step: dict, step_num: int = None):
@@ -92,7 +93,7 @@ def _write_step(f, step: dict, step_num: int = None):
             f.write(f"> **Note:** {value}\n\n")
 
 
-async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
+async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, output: str):
     """Async implementation of create command."""
 
     # Check for API key
@@ -115,14 +116,16 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
         has_prompt=bool(prompt),
         verbose=verbose,
         dry_run=dry_run,
+        rca_enabled=not no_rca and not dry_run,
         output=output,
     )
 
     # Import and create pipeline
     from adk_agents.pipeline import create_lab_pipeline
 
-    # Create pipeline based on dry-run flag
-    pipeline = create_lab_pipeline(include_validation=not dry_run)
+    # Create pipeline with RCA enabled by default (unless --no-rca or --dry-run)
+    enable_rca = not no_rca and not dry_run
+    pipeline = create_lab_pipeline(include_validation=not dry_run, include_rca=enable_rca)
 
     # Initialize ADK session and runner
     app_name = "adk_agents"
@@ -353,6 +356,17 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
 
                     console.print(f"[green]✓ Draft lab guide (Markdown) saved:[/green] {guide_md_file}")
 
+            # Save patch plan (if RCA was run)
+            if "patch_plan" in session.state:
+                patch_file = output_dir / "patch_plan.json"
+                with open(patch_file, "w") as f:
+                    # Convert to dict if it's a Pydantic model
+                    patch_plan = session.state["patch_plan"]
+                    if hasattr(patch_plan, 'model_dump'):
+                        patch_plan = patch_plan.model_dump()
+                    json.dump(patch_plan, f, indent=2)
+                console.print(f"[green]✓ RCA patch plan saved:[/green] {patch_file}")
+
             # Save validation result
             if "validation_result" in session.state:
                 val_file = output_dir / "validation_result.json"
@@ -367,6 +381,14 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
                 else:
                     console.print("\n[bold red]✗ Headless validation FAILED[/bold red]")
                     console.print(f"[red]Error: {val_result.get('summary', {}).get('error', 'Unknown error')}[/red]")
+
+                    # Show RCA analysis if available
+                    if "patch_plan" in session.state:
+                        patch_plan = session.state["patch_plan"]
+                        if hasattr(patch_plan, 'analysis'):
+                            console.print(f"\n[yellow]RCA Analysis:[/yellow] {patch_plan.analysis}")
+                            console.print(f"[yellow]Root Cause:[/yellow] {patch_plan.root_cause_type}")
+                            console.print(f"[yellow]Target Agent:[/yellow] {patch_plan.target_agent}")
             elif dry_run:
                 console.print("\n[dim]Skipped headless validation (dry-run mode)[/dim]")
 
