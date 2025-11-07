@@ -38,75 +38,28 @@ class SessionStateWriterAgent(BaseAgent):
         object.__setattr__(self, 'detect_by_fields', detect_by_fields)
 
     async def run_async(self, context: InvocationContext):
-        """Extract and write to session state."""
+        """Check session state and log status.
 
-        # Skip if already in session state
+        This agent serves as a 'flush point' to ensure ADK commits the previous
+        agent's output_key to session state before the next agent runs.
+        """
+
+        # Just check if the key exists in session state
         if context.session.state.get(self.output_key):
             logger.info(
-                "session_state_already_exists",
-                output_key=self.output_key
-            )
-            return  # Already there, nothing to do
-
-        # Get input from the previous agent (this is the previous agent's output)
-        if not context.input:
-            logger.warning("no_input_from_previous_agent", output_key=self.output_key)
-            return
-
-        # Extract text from context.input
-        text = None
-        if hasattr(context.input, 'parts') and context.input.parts:
-            for part in context.input.parts:
-                if hasattr(part, 'text') and part.text:
-                    text = part.text
-                    break
-        elif isinstance(context.input, str):
-            text = context.input
-
-        if not text:
-            logger.warning("no_text_in_input", output_key=self.output_key)
-            return
-
-        # Try to extract JSON (handle markdown code fences)
-        try:
-            # First try direct JSON parse
-            try:
-                parsed = json.loads(text)
-            except json.JSONDecodeError:
-                # Try extracting from markdown code fence
-                json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
-                if json_match:
-                    parsed = json.loads(json_match.group(1))
-                else:
-                    logger.warning("no_json_found", output_key=self.output_key)
-                    return
-
-            # Verify this is the right output type by checking for expected fields
-            has_required_fields = all(field in parsed for field in self.detect_by_fields)
-
-            if has_required_fields:
-                context.session.state[self.output_key] = parsed
-                logger.info(
-                    "session_state_written",
-                    output_key=self.output_key,
-                    keys=list(parsed.keys())
-                )
-            else:
-                logger.warning(
-                    "json_missing_required_fields",
-                    output_key=self.output_key,
-                    expected_fields=self.detect_by_fields,
-                    found_fields=list(parsed.keys())
-                )
-
-        except Exception as e:
-            logger.error(
-                "session_state_extraction_failed",
+                "session_state_verified",
                 output_key=self.output_key,
-                error=str(e)
+                keys=list(context.session.state.get(self.output_key, {}).keys()) if isinstance(context.session.state.get(self.output_key), dict) else "not_dict"
+            )
+        else:
+            logger.warning(
+                "session_state_missing",
+                output_key=self.output_key,
+                available_keys=list(context.session.state.keys())
             )
 
-        return  # Exit without yielding (satisfies async generator requirement)
+        # Exit without yielding (satisfies async generator requirement)
+        return
         yield  # Unreachable but makes this an async generator
 
 

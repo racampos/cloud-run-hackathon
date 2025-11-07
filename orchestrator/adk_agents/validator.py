@@ -65,19 +65,42 @@ class ValidatorAgent(BaseAgent):
         draft_guide = context.session.state.get("draft_lab_guide")
         design_output = context.session.state.get("design_output")
 
+        # Fallback: Try reading from output files if not in session state
+        output_dir = Path("./output")
+        if not draft_guide:
+            draft_file = output_dir / "draft_lab_guide.json"
+            if draft_file.exists():
+                try:
+                    with open(draft_file) as f:
+                        draft_guide = json.load(f)
+                    logger.info("loaded_draft_guide_from_file", path=str(draft_file))
+                except Exception as e:
+                    logger.error("failed_to_load_draft_guide_from_file", error=str(e))
+
+        if not design_output:
+            design_file = output_dir / "design_output.json"
+            if design_file.exists():
+                try:
+                    with open(design_file) as f:
+                        design_output = json.load(f)
+                    logger.info("loaded_design_output_from_file", path=str(design_file))
+                except Exception as e:
+                    logger.error("failed_to_load_design_output_from_file", error=str(e))
+
         if not draft_guide or not design_output:
             logger.warning(
-                "missing_session_state_skipping_validation",
+                "missing_inputs_skipping_validation",
                 has_draft_guide=bool(draft_guide),
                 has_design_output=bool(design_output),
-                state_keys=list(context.session.state.keys())
+                state_keys=list(context.session.state.keys()),
+                tried_file_fallback=True
             )
             # Skip validation if inputs are missing
             context.session.state["validation_result"] = {
                 "execution_id": "skipped",
                 "success": False,
                 "summary": {
-                    "error": "Validation skipped - missing required inputs in session state"
+                    "error": "Validation skipped - missing required inputs (not in session state or output files)"
                 },
                 "skipped": True
             }

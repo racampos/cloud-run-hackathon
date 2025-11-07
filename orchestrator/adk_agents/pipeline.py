@@ -28,9 +28,9 @@ def create_lab_pipeline(include_validation: bool = True) -> SequentialAgent:
             sub_agents=[
                 planner_agent,        # Interactive Q&A → exercise_spec
                 designer_agent,       # Reads exercise_spec → design_output (with linting)
-                design_state_writer,  # Extract design_output and write to session state
+                design_state_writer,  # Verify design_output in session state (flush point)
                 author_agent,         # Reads exercise_spec + design_output → draft_lab_guide (with linting)
-                draft_state_writer,   # Extract draft_lab_guide and write to session state
+                draft_state_writer,   # Verify draft_lab_guide in session state (flush point)
                 validator_agent       # Reads draft_lab_guide + design_output → validation_result
             ]
         )
