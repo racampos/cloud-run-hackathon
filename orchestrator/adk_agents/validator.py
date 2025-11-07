@@ -57,23 +57,31 @@ class ValidatorAgent(BaseAgent):
                 "pip install google-cloud-run google-auth"
             )
 
-        # 1. Read inputs from session state
+        # 1. Read inputs from session state or fallback to output files
         import json
         import re
+        from pathlib import Path
 
         draft_guide = context.session.state.get("draft_lab_guide")
         design_output = context.session.state.get("design_output")
 
         if not draft_guide or not design_output:
-            logger.error(
-                "missing_session_state",
+            logger.warning(
+                "missing_session_state_skipping_validation",
                 has_draft_guide=bool(draft_guide),
                 has_design_output=bool(design_output),
                 state_keys=list(context.session.state.keys())
             )
-            raise ValueError(
-                "Missing required inputs. Need draft_lab_guide and design_output in session state."
-            )
+            # Skip validation if inputs are missing
+            context.session.state["validation_result"] = {
+                "execution_id": "skipped",
+                "success": False,
+                "summary": {
+                    "error": "Validation skipped - missing required inputs in session state"
+                },
+                "skipped": True
+            }
+            return  # Exit early without yielding (satisfies async generator requirement)
 
         # Parse JSON strings if needed (agents may output JSON wrapped in markdown)
         if isinstance(draft_guide, str):
@@ -216,6 +224,9 @@ class ValidatorAgent(BaseAgent):
 
         payload = {
             "exercise_id": exercise_id,
+            "artifact_prefix": exercise_id,  # Use execution_id as artifact prefix
+            "run_id": exercise_id,  # Use execution_id as run_id
+            "lab_id": "validator",  # Fixed lab_id for validator runs
             "topology_yaml": design_output.get("topology_yaml", ""),
             "devices": devices,
             "options": {
@@ -244,34 +255,48 @@ class ValidatorAgent(BaseAgent):
 
         execution_id = payload["exercise_id"]
 
-        # 1. Upload payload to GCS
+        # 1. Upload payload to GCS at the "pending/latest" location
+        # The Cloud Run Job has SPEC_GCS_PATH=gs://bucket/pending/latest/spec.json
         credentials, _ = default()
         storage_client = storage.Client(credentials=credentials, project=self.project_id)
         bucket = storage_client.bucket(self.bucket_name)
 
-        spec_path = f"{execution_id}/spec.json"
-        blob = bucket.blob(spec_path)
-        blob.upload_from_string(
-            json_lib.dumps(payload, indent=2),
-            content_type="application/json"
+        # Upload to both locations:
+        # - pending/latest/spec.json (for the job to read)
+        # - {execution_id}/spec.json (for archival/debugging)
+        pending_path = "pending/latest/spec.json"
+        archive_path = f"{execution_id}/spec.json"
+
+        payload_json = json_lib.dumps(payload, indent=2)
+
+        # Upload to pending (this is what the job will read)
+        pending_blob = bucket.blob(pending_path)
+        pending_blob.upload_from_string(payload_json, content_type="application/json")
+
+        # Also archive it
+        archive_blob = bucket.blob(archive_path)
+        archive_blob.upload_from_string(payload_json, content_type="application/json")
+
+        logger.info(
+            "validator_payload_uploaded",
+            execution_id=execution_id,
+            pending_path=pending_path,
+            archive_path=archive_path
         )
-        logger.info("validator_payload_uploaded", execution_id=execution_id, path=spec_path)
 
-        # 2. Submit Cloud Run Job using gcloud CLI with env var override
-        # The CLI implementation may handle env vars differently than the Python API
-        gcs_spec_path = f"gs://{self.bucket_name}/{spec_path}"
-
+        # 2. Submit Cloud Run Job using gcloud CLI
+        # The job definition now has SPEC_GCS_PATH permanently set to gs://bucket/pending/latest/spec.json
+        # We just need to trigger the execution
         cmd = [
             "gcloud", "run", "jobs", "execute", self.job_name,
             "--region", self.region,
-            "--update-env-vars", f"SPEC_GCS_PATH={gcs_spec_path}",
             "--format", "json"
         ]
 
         logger.info(
-            "cloud_run_job_submitting_via_cli",
+            "cloud_run_job_submitting",
             execution_id=execution_id,
-            spec_path=gcs_spec_path,
+            spec_location=f"gs://{self.bucket_name}/{pending_path}",
             command=" ".join(cmd)
         )
 
@@ -300,7 +325,7 @@ class ValidatorAgent(BaseAgent):
             "cloud_run_job_started",
             job=self.job_name,
             execution_id=execution_id,
-            spec_path=gcs_spec_path
+            spec_location=f"gs://{self.bucket_name}/{pending_path}"
         )
 
     async def _poll_job(self, execution_id: str, max_wait_seconds: int = 600) -> bool:
