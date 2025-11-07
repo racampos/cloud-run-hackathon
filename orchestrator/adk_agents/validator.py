@@ -84,21 +84,47 @@ class ValidatorAgent(BaseAgent):
             return  # Exit early without yielding (satisfies async generator requirement)
 
         # Parse JSON strings if needed (agents may output JSON wrapped in markdown)
-        if isinstance(draft_guide, str):
-            # Strip markdown code fences if present
-            if draft_guide.strip().startswith("```"):
-                lines = draft_guide.strip().split("\n")
-                draft_guide = "\n".join(lines[1:-1])
-            draft_guide = json.loads(draft_guide)
-            logger.info("parsed_draft_guide_from_string")
+        if isinstance(draft_guide, str) and draft_guide.strip():
+            try:
+                # Strip markdown code fences if present
+                if draft_guide.strip().startswith("```"):
+                    lines = draft_guide.strip().split("\n")
+                    draft_guide = "\n".join(lines[1:-1])
+                draft_guide = json.loads(draft_guide)
+                logger.info("parsed_draft_guide_from_string")
+            except json.JSONDecodeError as e:
+                logger.error("draft_guide_json_parse_error", error=str(e), content_preview=draft_guide[:200])
+                # Skip validation if we can't parse
+                context.session.state["validation_result"] = {
+                    "execution_id": "skipped",
+                    "success": False,
+                    "summary": {"error": f"Failed to parse draft_guide JSON: {str(e)}"},
+                    "skipped": True
+                }
+                return
+        elif isinstance(draft_guide, dict):
+            logger.info("draft_guide_already_dict")
 
-        if isinstance(design_output, str):
-            # Strip markdown code fences if present
-            if design_output.strip().startswith("```"):
-                lines = design_output.strip().split("\n")
-                design_output = "\n".join(lines[1:-1])
-            design_output = json.loads(design_output)
-            logger.info("parsed_design_output_from_string")
+        if isinstance(design_output, str) and design_output.strip():
+            try:
+                # Strip markdown code fences if present
+                if design_output.strip().startswith("```"):
+                    lines = design_output.strip().split("\n")
+                    design_output = "\n".join(lines[1:-1])
+                design_output = json.loads(design_output)
+                logger.info("parsed_design_output_from_string")
+            except json.JSONDecodeError as e:
+                logger.error("design_output_json_parse_error", error=str(e), content_preview=design_output[:200])
+                # Skip validation if we can't parse
+                context.session.state["validation_result"] = {
+                    "execution_id": "skipped",
+                    "success": False,
+                    "summary": {"error": f"Failed to parse design_output JSON: {str(e)}"},
+                    "skipped": True
+                }
+                return
+        elif isinstance(design_output, dict):
+            logger.info("design_output_already_dict")
 
         # 2. Convert to headless runner payload
         payload = self._convert_payload(draft_guide, design_output)

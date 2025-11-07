@@ -9,6 +9,7 @@ from adk_agents.planner import planner_agent
 from adk_agents.designer import designer_agent
 from adk_agents.author import author_agent
 from adk_agents.validator import validator_agent
+from adk_agents.session_state_writer import design_state_writer, draft_state_writer
 
 
 def create_lab_pipeline(include_validation: bool = True) -> SequentialAgent:
@@ -25,10 +26,12 @@ def create_lab_pipeline(include_validation: bool = True) -> SequentialAgent:
             name="LabCreationPipeline",
             description="End-to-end lab creation: Planner → Designer → Author → Validator",
             sub_agents=[
-                planner_agent,      # Interactive Q&A → exercise_spec
-                designer_agent,     # Reads exercise_spec → design_output (with linting)
-                author_agent,       # Reads exercise_spec + design_output → draft_lab_guide (with linting)
-                validator_agent     # Reads draft_lab_guide + design_output → validation_result
+                planner_agent,        # Interactive Q&A → exercise_spec
+                designer_agent,       # Reads exercise_spec → design_output (with linting)
+                design_state_writer,  # Extract design_output and write to session state
+                author_agent,         # Reads exercise_spec + design_output → draft_lab_guide (with linting)
+                draft_state_writer,   # Extract draft_lab_guide and write to session state
+                validator_agent       # Reads draft_lab_guide + design_output → validation_result
             ]
         )
     else:
@@ -38,6 +41,8 @@ def create_lab_pipeline(include_validation: bool = True) -> SequentialAgent:
             sub_agents=[
                 planner_agent,
                 designer_agent,
-                author_agent
+                design_state_writer,
+                author_agent,
+                draft_state_writer
             ]
         )
