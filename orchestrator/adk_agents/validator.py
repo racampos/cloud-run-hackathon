@@ -11,7 +11,6 @@ from google.adk.agents import BaseAgent, InvocationContext
 
 # Cloud Run imports - only needed for full validation (not dry-run)
 try:
-    from google.cloud import run_v2
     from google.auth import default
     from tools.artifacts import fetch_validation_artifacts
     CLOUD_RUN_AVAILABLE = True
@@ -228,7 +227,10 @@ class ValidatorAgent(BaseAgent):
         return payload
 
     async def _submit_job(self, payload: dict):
-        """Submit Cloud Run Job execution.
+        """Submit Cloud Run Job execution using gcloud CLI.
+
+        The Cloud Run Jobs v2 API doesn't support execution-time env var overrides,
+        so we use gcloud CLI which handles it differently.
 
         Args:
             payload: Headless runner payload
@@ -238,6 +240,7 @@ class ValidatorAgent(BaseAgent):
         """
         from google.cloud import storage
         import json as json_lib
+        import subprocess
 
         execution_id = payload["exercise_id"]
 
@@ -254,49 +257,50 @@ class ValidatorAgent(BaseAgent):
         )
         logger.info("validator_payload_uploaded", execution_id=execution_id, path=spec_path)
 
-        # 2. Submit Cloud Run Job with spec path via environment variable
-        # Use task_count=1 and task_overrides instead of container_overrides
-        client = run_v2.JobsAsyncClient(credentials=credentials)
-        job_path = f"projects/{self.project_id}/locations/{self.region}/jobs/{self.job_name}"
+        # 2. Submit Cloud Run Job using gcloud CLI with env var override
+        # The CLI implementation may handle env vars differently than the Python API
+        gcs_spec_path = f"gs://{self.bucket_name}/{spec_path}"
 
-        # Create execution request with task-level environment variable override
-        override = run_v2.RunJobRequest.Overrides()
-
-        # Set task count
-        override.task_count = 1
-
-        # Create container override with environment variable
-        container_override = run_v2.RunJobRequest.Overrides.ContainerOverride()
-        env_var = run_v2.EnvVar()
-        env_var.name = "SPEC_GCS_PATH"
-        env_var.value = f"gs://{self.bucket_name}/{spec_path}"
-        container_override.env = [env_var]
-
-        # Add to task overrides (not container overrides directly)
-        task_override = run_v2.RunJobRequest.Overrides.TaskOverride()
-        task_override.container_overrides = [container_override]
-        override.task_overrides = [task_override]
-
-        request = run_v2.RunJobRequest(
-            name=job_path,
-            overrides=override
-        )
+        cmd = [
+            "gcloud", "run", "jobs", "execute", self.job_name,
+            "--region", self.region,
+            "--update-env-vars", f"SPEC_GCS_PATH={gcs_spec_path}",
+            "--format", "json"
+        ]
 
         logger.info(
-            "cloud_run_job_submitting",
+            "cloud_run_job_submitting_via_cli",
             execution_id=execution_id,
-            spec_path=f"gs://{self.bucket_name}/{spec_path}",
-            env_var_name="SPEC_GCS_PATH"
+            spec_path=gcs_spec_path,
+            command=" ".join(cmd)
         )
 
-        # Execute job (non-blocking)
-        operation = await client.run_job(request=request)
+        # Execute gcloud command asynchronously (don't wait for completion)
+        # Use asyncio.create_subprocess_exec to avoid blocking
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+
+        # Wait for gcloud to submit the job (but not for job to complete)
+        stdout, stderr = await process.communicate()
+
+        if process.returncode != 0:
+            error_msg = stderr.decode() if stderr else "Unknown error"
+            logger.error(
+                "cloud_run_job_submit_failed",
+                execution_id=execution_id,
+                error=error_msg,
+                returncode=process.returncode
+            )
+            raise Exception(f"Failed to submit Cloud Run Job: {error_msg}")
 
         logger.info(
             "cloud_run_job_started",
             job=self.job_name,
             execution_id=execution_id,
-            spec_path=f"gs://{self.bucket_name}/{spec_path}"
+            spec_path=gcs_spec_path
         )
 
     async def _poll_job(self, execution_id: str, max_wait_seconds: int = 600) -> bool:
