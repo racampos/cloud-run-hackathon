@@ -235,54 +235,62 @@ class ValidatorAgent(BaseAgent):
             design_output: DesignOutput dict from session state
 
         Returns:
-            Payload dict for headless runner API
+            Payload dict for headless runner API with flat steps array
         """
         import time
 
         exercise_id = f"val-{int(time.time())}"
 
-        # Extract device steps from draft guide
-        devices = {}
+        # Build flat steps array
+        steps = []
+
+        # Process each device section from draft guide
         for section in draft_guide.get("device_sections", []):
             device_name = section["device_name"]
-            platform = section["platform"]
 
-            # Extract configuration commands (type="cmd")
-            config_commands = [
-                step["value"]
-                for step in section.get("steps", [])
-                if step.get("type") == "cmd"
-            ]
-
-            # Get initial config from design output
+            # Add initial config steps
             initial_commands = design_output.get("initial_configs", {}).get(device_name, [])
+            for cmd in initial_commands:
+                steps.append({
+                    "type": "cli",
+                    "device": device_name,
+                    "text": cmd,
+                    "trigger": "enter",
+                    "non_interactive": True
+                })
 
-            # Get verification commands (type="verify")
-            verify_commands = [
-                step["value"]
-                for step in section.get("steps", [])
-                if step.get("type") == "verify"
-            ]
+            # Add configuration steps (type="cmd")
+            for step in section.get("steps", []):
+                if step.get("type") == "cmd":
+                    steps.append({
+                        "type": "cli",
+                        "device": device_name,
+                        "text": step["value"],
+                        "trigger": "enter",
+                        "non_interactive": True
+                    })
 
-            devices[device_name] = {
-                "platform": platform,
-                "initial": initial_commands,
-                "steps": config_commands,
-                "verify": verify_commands
-            }
+            # Add verification steps (type="verify")
+            for step in section.get("steps", []):
+                if step.get("type") == "verify":
+                    steps.append({
+                        "type": "cli",
+                        "device": device_name,
+                        "text": step["value"],
+                        "trigger": "enter",
+                        "non_interactive": True
+                    })
 
         payload = {
-            "exercise_id": exercise_id,
-            "artifact_prefix": exercise_id,  # Use execution_id as artifact prefix
-            "run_id": exercise_id,  # Use execution_id as run_id
-            "lab_id": "validator",  # Fixed lab_id for validator runs
+            "lab_id": "validator",
+            "run_id": exercise_id,
             "topology_yaml": design_output.get("topology_yaml", ""),
-            "devices": devices,
-            "options": {
-                "cleanup": True,
-                "timeout_seconds": 300
-            }
+            "steps": steps,
+            "artifact_prefix": f"gs://{self.bucket_name}/{exercise_id}"
         }
+
+        # Store exercise_id separately for tracking
+        payload["exercise_id"] = exercise_id
 
         return payload
 
