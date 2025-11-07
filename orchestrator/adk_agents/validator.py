@@ -172,8 +172,8 @@ class ValidatorAgent(BaseAgent):
         # 4. Poll for completion
         logger.info("validator_polling", execution_id=execution_id)
         try:
-            success = await self._poll_job(execution_id, max_wait_seconds=600)
-            logger.info("validator_job_completed", execution_id=execution_id, success=success)
+            actual_execution_id = await self._poll_job(execution_id, max_wait_seconds=600)
+            logger.info("validator_job_completed", execution_id=actual_execution_id)
         except Exception as e:
             logger.error("validator_job_poll_failed", error=str(e))
             context.session.state["validation_result"] = {
@@ -184,23 +184,23 @@ class ValidatorAgent(BaseAgent):
             }
             return
 
-        # 5. Fetch artifacts from GCS
-        logger.info("validator_fetching_artifacts", execution_id=execution_id)
+        # 5. Fetch artifacts from GCS (use actual_execution_id from polling)
+        logger.info("validator_fetching_artifacts", execution_id=actual_execution_id)
         try:
             artifacts = await fetch_validation_artifacts(
-                execution_id=execution_id,
+                execution_id=actual_execution_id,
                 bucket_name=self.bucket_name,
                 project_id=self.project_id
             )
             logger.info(
                 "validator_artifacts_fetched",
-                execution_id=execution_id,
-                num_devices=len(artifacts.get("device_outputs", {}))
+                execution_id=actual_execution_id,
+                num_devices=len(artifacts.device_outputs)
             )
         except Exception as e:
             logger.error("validator_artifacts_fetch_failed", error=str(e))
             context.session.state["validation_result"] = {
-                "execution_id": execution_id,
+                "execution_id": actual_execution_id,
                 "success": False,
                 "summary": {"error": f"Artifact fetch failed: {str(e)}"},
                 "error": str(e)
@@ -209,16 +209,16 @@ class ValidatorAgent(BaseAgent):
 
         # 6. Write result to session state
         context.session.state["validation_result"] = {
-            "execution_id": execution_id,
-            "success": artifacts.get("summary", {}).get("success", False),
-            "summary": artifacts.get("summary", {}),
-            "device_outputs": artifacts.get("device_outputs", {}),
-            "logs": artifacts.get("logs", "")
+            "execution_id": actual_execution_id,
+            "success": artifacts.success,
+            "summary": artifacts.summary,
+            "device_outputs": artifacts.device_outputs,
+            "logs": artifacts.logs
         }
 
         logger.info(
             "validator_completed",
-            execution_id=execution_id,
+            execution_id=actual_execution_id,
             success=context.session.state["validation_result"]["success"]
         )
 
@@ -385,40 +385,60 @@ class ValidatorAgent(BaseAgent):
             spec_location=f"gs://{self.bucket_name}/{pending_path}"
         )
 
-    async def _poll_job(self, execution_id: str, max_wait_seconds: int = 600) -> bool:
+    async def _poll_job(self, execution_id: str, max_wait_seconds: int = 600) -> str:
         """Poll for job completion by checking GCS artifacts.
 
+        The headless-runner may generate a different run_id than the one in the spec,
+        so we scan for recently created results.json files within a time window.
+
         Args:
-            execution_id: Execution ID to poll
+            execution_id: Expected execution ID (may not match actual run_id)
             max_wait_seconds: Maximum time to wait
 
         Returns:
-            True if job completed successfully, False otherwise
+            Actual run_id from results.json if found, raises exception otherwise
         """
         from google.cloud import storage
+        import time
 
         credentials, _ = default()
         storage_client = storage.Client(credentials=credentials, project=self.project_id)
         bucket = storage_client.bucket(self.bucket_name)
 
-        summary_path = f"{execution_id}/summary.json"
+        # Extract timestamp from our execution_id to establish search window
+        # execution_id format: "val-TIMESTAMP"
+        expected_timestamp = int(execution_id.split("-")[-1])
 
         poll_interval = 10  # seconds
         elapsed = 0
+        start_time = time.time()
 
         while elapsed < max_wait_seconds:
-            # Check if summary.json exists
-            blob = bucket.blob(summary_path)
-            if blob.exists():
-                logger.info("validator_job_completed_detected", execution_id=execution_id)
-                return True
+            # Scan for results.json files created within a time window
+            # Check both the expected location and nearby timestamps (±120 seconds)
+            for time_offset in [0, 30, 60, 90, 120, -30, -60]:
+                search_timestamp = expected_timestamp + time_offset
+                candidate_id = f"val-{search_timestamp}"
+                results_path = f"{candidate_id}/results.json"
+
+                blob = bucket.blob(results_path)
+                if blob.exists():
+                    # Verify this is recent (within our job submission window)
+                    if abs(search_timestamp - expected_timestamp) < 300:  # 5 min window
+                        logger.info(
+                            "validator_job_completed_detected",
+                            expected_id=execution_id,
+                            actual_id=candidate_id,
+                            time_diff_seconds=search_timestamp - expected_timestamp
+                        )
+                        return candidate_id
 
             await asyncio.sleep(poll_interval)
-            elapsed += poll_interval
-            logger.debug("validator_polling", execution_id=execution_id, elapsed=elapsed)
+            elapsed = int(time.time() - start_time)
+            logger.info("validator_polling", execution_id=execution_id, elapsed=elapsed)
 
         logger.warning("validator_job_timeout", execution_id=execution_id)
-        return False
+        raise TimeoutError(f"Validation job timed out after {max_wait_seconds}s")
 
 
 # Create singleton instance for use in pipeline

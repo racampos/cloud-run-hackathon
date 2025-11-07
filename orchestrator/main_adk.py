@@ -189,26 +189,49 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, output: str):
                     # Ensure content is a string
                     text = event.content if isinstance(event.content, str) else str(event.content)
 
-                    # Try to find JSON in markdown code fences
-                    try:
-                        json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
-                        if json_match:
-                            try:
-                                parsed = json.loads(json_match.group(1))
-                                # Detect which output this is by looking for key fields
-                                if "topology_yaml" in parsed and "design_output" not in session.state:
-                                    session.state["design_output"] = parsed
-                                    logger.info("manual_extraction_design_output")
-                                elif "title" in parsed and "objectives" in parsed and "constraints" in parsed:
-                                    if "exercise_spec" not in session.state:
+                    # Try to find JSON in markdown code fences first
+                    json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', text)
+                    if json_match:
+                        try:
+                            parsed = json.loads(json_match.group(1))
+                            # Detect which output this is by looking for key fields
+                            if "topology_yaml" in parsed and "design_output" not in session.state:
+                                session.state["design_output"] = parsed
+                                logger.info("manual_extraction_design_output", source="markdown_fence")
+                            elif "title" in parsed and "objectives" in parsed and "constraints" in parsed:
+                                if "exercise_spec" not in session.state:
+                                    session.state["exercise_spec"] = parsed
+                                    logger.info("manual_extraction_exercise_spec", source="markdown_fence")
+                        except json.JSONDecodeError:
+                            pass
+                    else:
+                        # Try to parse as plain JSON (no markdown fences)
+                        try:
+                            # Look for JSON object in the text
+                            json_obj_match = re.search(r'(\{[\s\S]*?"topology_yaml"[\s\S]*?\})', text)
+                            if json_obj_match and "design_output" not in session.state:
+                                try:
+                                    parsed = json.loads(json_obj_match.group(1))
+                                    if "topology_yaml" in parsed:
+                                        session.state["design_output"] = parsed
+                                        logger.info("manual_extraction_design_output", source="plain_json")
+                                except json.JSONDecodeError:
+                                    pass
+
+                            # Look for exercise_spec JSON
+                            json_spec_match = re.search(r'(\{[\s\S]*?"constraints"[\s\S]*?\})', text)
+                            if json_spec_match and "exercise_spec" not in session.state:
+                                try:
+                                    parsed = json.loads(json_spec_match.group(1))
+                                    if "title" in parsed and "objectives" in parsed and "constraints" in parsed:
                                         session.state["exercise_spec"] = parsed
-                                        logger.info("manual_extraction_exercise_spec")
-                            except json.JSONDecodeError:
-                                pass
-                    except (TypeError, AttributeError) as e:
-                        # Skip events that can't be processed
-                        logger.debug("manual_extraction_skip", error=str(e))
-                        pass
+                                        logger.info("manual_extraction_exercise_spec", source="plain_json")
+                                except json.JSONDecodeError:
+                                    pass
+                        except (TypeError, AttributeError, json.JSONDecodeError) as e:
+                            # Skip events that can't be processed
+                            logger.debug("manual_extraction_skip", error=str(e))
+                            pass
 
         # Pipeline completed - check what was generated
         if session.state:
