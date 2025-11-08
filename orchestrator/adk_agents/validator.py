@@ -32,7 +32,7 @@ class ValidatorAgent(BaseAgent):
     6. Writes validation_result to session state
     """
 
-    def __init__(self):
+    def __init__(self, mock_failure: bool = False):
         super().__init__(
             name="ValidatorAgent",
             description="Validates lab guides via headless Containerlab simulation"
@@ -42,13 +42,37 @@ class ValidatorAgent(BaseAgent):
         object.__setattr__(self, 'region', os.getenv("REGION", "us-central1"))
         object.__setattr__(self, 'bucket_name', os.getenv("GCS_BUCKET", "netgenius-artifacts-dev"))
         object.__setattr__(self, 'job_name', "headless-runner")
+        object.__setattr__(self, 'mock_failure', mock_failure)
 
     async def run_async(self, context: InvocationContext):
         """Execute headless validation workflow.
 
         This is an async generator but yields nothing - just updates session state.
         """
-        logger.info("validator_started")
+        logger.info("validator_started", mock_failure=self.mock_failure)
+
+        # Mock failure mode for testing RCA retry logic
+        if self.mock_failure:
+            logger.info("validator_mock_failure_mode")
+            context.session.state["validation_result"] = {
+                "execution_id": "mock-failure",
+                "success": False,
+                "summary": {
+                    "error": "Mock validation failure for RCA testing",
+                    "details": "IP addressing mismatch detected on R1 interface Gi0/0"
+                },
+                "device_outputs": {
+                    "R1": {
+                        "commands": ["show ip interface brief"],
+                        "outputs": ["GigabitEthernet0/0     192.168.1.100  YES manual up                    up"],
+                        "errors": ["Expected IP 192.168.1.1 but found 192.168.1.100"]
+                    }
+                },
+                "logs": ["[MOCK] Validation failed: IP mismatch on R1 Gi0/0"],
+                "mock": True
+            }
+            logger.info("validator_mock_failure_injected")
+            return
 
         if not CLOUD_RUN_AVAILABLE:
             logger.error("cloud_run_not_available")
@@ -441,5 +465,5 @@ class ValidatorAgent(BaseAgent):
         raise TimeoutError(f"Validation job timed out after {max_wait_seconds}s")
 
 
-# Create singleton instance for use in pipeline
-validator_agent = ValidatorAgent()
+# Create singleton instance for use in pipeline (normal mode)
+validator_agent = ValidatorAgent(mock_failure=False)

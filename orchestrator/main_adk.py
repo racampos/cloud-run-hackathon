@@ -47,11 +47,12 @@ def cli():
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 @click.option("--dry-run", is_flag=True, help="Skip headless validation")
 @click.option("--no-rca", is_flag=True, help="Disable RCA retry loop (validation failures will not auto-retry)")
+@click.option("--mock-validation-failure", is_flag=True, help="Use mock validator that always fails (for testing RCA)")
 @click.option("--output", default="./output", help="Output directory for artifacts")
-def create(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, output: str):
+def create(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, mock_validation_failure: bool, output: str):
     """Create a new lab using ADK pipeline with multi-turn Q&A."""
     import asyncio
-    asyncio.run(_create_async(prompt, verbose, dry_run, no_rca, output))
+    asyncio.run(_create_async(prompt, verbose, dry_run, no_rca, mock_validation_failure, output))
 
 
 def _write_step(f, step: dict, step_num: int = None):
@@ -93,7 +94,7 @@ def _write_step(f, step: dict, step_num: int = None):
             f.write(f"> **Note:** {value}\n\n")
 
 
-async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, output: str):
+async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, mock_validation_failure: bool, output: str):
     """Async implementation of create command."""
 
     # Check for API key
@@ -117,6 +118,7 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool,
         verbose=verbose,
         dry_run=dry_run,
         rca_enabled=not no_rca and not dry_run,
+        mock_validation_failure=mock_validation_failure,
         output=output,
     )
 
@@ -125,7 +127,11 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool,
 
     # Create pipeline with RCA enabled by default (unless --no-rca or --dry-run)
     enable_rca = not no_rca and not dry_run
-    pipeline = create_lab_pipeline(include_validation=not dry_run, include_rca=enable_rca)
+    pipeline = create_lab_pipeline(
+        include_validation=not dry_run,
+        include_rca=enable_rca,
+        mock_validation_failure=mock_validation_failure
+    )
 
     # Initialize ADK session and runner
     app_name = "adk_agents"

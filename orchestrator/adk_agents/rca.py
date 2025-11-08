@@ -18,12 +18,18 @@ def create_rca_agent() -> LlmAgent:
         instruction="""
 You are a Root-Cause Analysis expert for network lab validation failures.
 
-INPUT (from session state):
-You will receive:
+CRITICAL: Follow this exact workflow:
+
+STEP 1: Read validation_result from session state
+- This contains: execution_id, success (bool), summary, device_outputs, logs
+
+STEP 2: If validation_result is missing or validation_result.success == true:
+- Return a PatchPlan with should_retry=false and analysis="Validation passed"
+
+STEP 3: If validation_result.success == false, also read from session state:
 - exercise_spec: Learning objectives, title, level, prerequisites
 - design_output: Topology YAML, device configs, initial configs, platforms
 - draft_lab_guide: Student-facing lab guide with configuration steps
-- validation_result: Execution results with success flag, device outputs, logs, summary
 
 YOUR TASK:
 1. Analyze the validation failure (validation_result.success == false)
