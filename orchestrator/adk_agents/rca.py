@@ -18,15 +18,15 @@ def create_rca_agent() -> LlmAgent:
         instruction="""
 You are a Root-Cause Analysis expert for network lab validation failures.
 
-CRITICAL: Follow this exact workflow:
+CRITICAL: Parse validation_result from this JSON input:
 
-STEP 1: Read validation_result from session state
-- This contains: execution_id, success (bool), summary, device_outputs, logs
+{validation_result_json?}
 
-STEP 2: If validation_result is missing or validation_result.success == true:
-- Return a PatchPlan with should_retry=false and analysis="Validation passed"
+STEP 1: Parse the validation_result JSON above
+- If empty or missing, return PatchPlan with should_retry=false and analysis="No validation result available"
+- If success == true, return PatchPlan with should_retry=false and analysis="Validation passed"
 
-STEP 3: If validation_result.success == false, also read from session state:
+STEP 2: If validation_result.success == false, also read from session state:
 - exercise_spec: Learning objectives, title, level, prerequisites
 - design_output: Topology YAML, device configs, initial configs, platforms
 - draft_lab_guide: Student-facing lab guide with configuration steps
@@ -154,48 +154,54 @@ def create_patch_router_agent() -> LlmAgent:
         instruction="""
 You are a patch routing agent that applies fixes based on RCA analysis.
 
-INPUT (from session state):
-- patch_plan: The PatchPlan from RCA agent
+CRITICAL: Parse the patch_plan from this JSON input:
 
-YOUR TASK:
-1. Read patch_plan from session state
-2. Check should_retry flag
-3. If should_retry == false:
-   - Return "ESCALATE" to break out of retry loop
-   - Add explanation of why human intervention is needed
-4. If should_retry == true:
-   - Route to appropriate agent based on target_agent field
-   - Provide patch_instructions to target agent
+{patch_plan?}
+
+STEP 1: Parse the patch_plan JSON above
+- If empty or missing, return "ESCALATE - No patch plan available"
+- Extract: root_cause_type, target_agent, patch_instructions, should_retry, confidence
+
+STEP 2: Check should_retry flag
+- If should_retry == false:
+  * Return "ESCALATE" to break out of retry loop
+  * Add explanation from patch_plan.analysis
+  * Example: "ESCALATE - Exercise specification issues detected. Human review required."
+
+STEP 3: Check confidence level
+- If confidence == "low":
+  * Return "ESCALATE - Root cause unclear. Human analysis needed."
+
+STEP 4: Route based on target_agent
+- Extract patch_instructions from the patch_plan JSON
+- Route to the appropriate agent with specific fix guidance
 
 ROUTING LOGIC:
 
-**If patch_plan.target_agent == "designer"**:
-- Call designer_agent (if available as tool)
-- Provide context: "The previous design had issues. Please regenerate design_output with these fixes: {patch_instructions}"
-- Designer will regenerate topology_yaml and initial_configs
+**If target_agent == "designer"**:
+- The Designer agent is available as a tool (if needed)
+- Return text explaining what needs to be fixed based on patch_instructions
+- Example: "DESIGN FIX NEEDED: [patch_instructions content]. Designer should regenerate topology_yaml and initial_configs."
 
-**If patch_plan.target_agent == "author"**:
-- Call author_agent (if available as tool)
-- Provide context: "The previous lab guide had issues. Please regenerate draft_lab_guide with these fixes: {patch_instructions}"
-- Author will regenerate device_sections with corrected steps
+**If target_agent == "author"**:
+- The Author agent is available as a tool (if needed)
+- Return text explaining what needs to be fixed based on patch_instructions
+- Example: "INSTRUCTION FIX NEEDED: [patch_instructions content]. Author should regenerate draft_lab_guide with corrected steps."
 
-**If patch_plan.target_agent == "planner"**:
+**If target_agent == "planner"**:
 - Return "ESCALATE" (spec changes require human approval)
-- Explain: "Exercise specification issues detected. Human review required."
+- Explain: "ESCALATE - Exercise specification issues detected. Human review required."
 
-**If patch_plan.confidence == "low"**:
-- Return "ESCALATE"
-- Explain: "Root cause unclear. Human analysis needed."
-
-OUTPUT:
-- If routing to agent: Call the appropriate tool/agent with patch instructions
-- If escalating: Return text containing "ESCALATE" keyword
+OUTPUT FORMAT:
+- If escalating: Return text starting with "ESCALATE" keyword
+- If fixes needed: Return text starting with "DESIGN FIX NEEDED" or "INSTRUCTION FIX NEEDED"
 - If validation passed: Return "SUCCESS - Validation passed, no fixes needed"
 
 IMPORTANT:
 - The "ESCALATE" keyword signals LoopAgent to stop iteration
 - Do NOT escalate on first failure - only if should_retry=false or confidence=low
 - Trust the RCA agent's analysis and routing decision
+- Extract all information from the patch_plan JSON provided above
 """,
         output_key="patch_result",
     )

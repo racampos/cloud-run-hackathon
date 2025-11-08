@@ -43,16 +43,33 @@ def cli():
 
 
 @cli.command()
-@click.option("--prompt", help="Initial lab prompt (interactive if not provided)")
+@click.option("--prompt", help="Initial lab prompt (interactive if not provided, ignored if using mock flags)")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 @click.option("--dry-run", is_flag=True, help="Skip headless validation")
 @click.option("--no-rca", is_flag=True, help="Disable RCA retry loop (validation failures will not auto-retry)")
-@click.option("--mock-validation-failure", is_flag=True, help="Use mock validator that always fails (for testing RCA)")
+@click.option("--mock-design-error", is_flag=True, help="Mock DESIGN validation failure (topology/config issue)")
+@click.option("--mock-instruction-error", is_flag=True, help="Mock INSTRUCTION validation failure (lab guide issue)")
+@click.option("--mock-objectives-error", is_flag=True, help="Mock OBJECTIVES validation failure (spec issue)")
 @click.option("--output", default="./output", help="Output directory for artifacts")
-def create(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, mock_validation_failure: bool, output: str):
+def create(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, mock_design_error: bool,
+           mock_instruction_error: bool, mock_objectives_error: bool, output: str):
     """Create a new lab using ADK pipeline with multi-turn Q&A."""
     import asyncio
-    asyncio.run(_create_async(prompt, verbose, dry_run, no_rca, mock_validation_failure, output))
+
+    # Determine mock failure mode
+    mock_mode = None
+    if mock_design_error:
+        mock_mode = "design"
+    elif mock_instruction_error:
+        mock_mode = "instruction"
+    elif mock_objectives_error:
+        mock_mode = "objectives"
+
+    # Override prompt if using mock mode
+    if mock_mode:
+        prompt = "Create a beginner lab to teach how to set passwords in a Cisco router, just enable and line console/vty password, include password encryption, 20 minutes"
+
+    asyncio.run(_create_async(prompt, verbose, dry_run, no_rca, mock_mode, output))
 
 
 def _write_step(f, step: dict, step_num: int = None):
@@ -94,8 +111,12 @@ def _write_step(f, step: dict, step_num: int = None):
             f.write(f"> **Note:** {value}\n\n")
 
 
-async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, mock_validation_failure: bool, output: str):
-    """Async implementation of create command."""
+async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool, mock_mode: str, output: str):
+    """Async implementation of create command.
+
+    Args:
+        mock_mode: One of "design", "instruction", "objectives", or None
+    """
 
     # Check for API key
     if not os.getenv("GOOGLE_API_KEY"):
@@ -118,7 +139,7 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool,
         verbose=verbose,
         dry_run=dry_run,
         rca_enabled=not no_rca and not dry_run,
-        mock_validation_failure=mock_validation_failure,
+        mock_mode=mock_mode,
         output=output,
     )
 
@@ -130,7 +151,7 @@ async def _create_async(prompt: str, verbose: bool, dry_run: bool, no_rca: bool,
     pipeline = create_lab_pipeline(
         include_validation=not dry_run,
         include_rca=enable_rca,
-        mock_validation_failure=mock_validation_failure
+        mock_mode=mock_mode
     )
 
     # Initialize ADK session and runner
