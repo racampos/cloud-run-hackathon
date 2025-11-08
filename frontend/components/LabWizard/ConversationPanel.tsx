@@ -49,16 +49,22 @@ export default function ConversationPanel({
               className={`max-w-[80%] rounded-lg px-4 py-3 ${
                 message.role === 'user'
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-900'
+                  : 'bg-gray-100'
               }`}
             >
-              <div className="text-xs font-medium mb-1 opacity-75">
+              <div className={`text-xs font-medium mb-1 ${
+                message.role === 'user' ? 'text-blue-100' : 'text-gray-600'
+              }`}>
                 {message.role === 'user' ? 'You' : 'Planner Agent'}
               </div>
-              <div className="whitespace-pre-wrap text-sm">
+              <div className={`whitespace-pre-wrap text-sm ${
+                message.role === 'user' ? 'text-white' : 'text-gray-900'
+              }`}>
                 {message.content}
               </div>
-              <div className="text-xs mt-1 opacity-60">
+              <div className={`text-xs mt-1 ${
+                message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
+              }`}>
                 {new Date(message.timestamp).toLocaleTimeString()}
               </div>
             </div>
@@ -91,7 +97,7 @@ export default function ConversationPanel({
               onChange={(e) => setInputValue(e.target.value)}
               placeholder="Type your response..."
               disabled={isLoading}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 placeholder:text-gray-400"
             />
             <button
               type="submit"

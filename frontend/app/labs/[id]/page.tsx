@@ -106,17 +106,17 @@ export default function LabDetailPage({
                 <div className="space-y-2 text-sm">
                   <div>
                     <span className="text-gray-600">Level:</span>
-                    <span className="ml-2 font-medium">{exercise_spec.level}</span>
+                    <span className="ml-2 font-medium text-gray-900">{exercise_spec.level}</span>
                   </div>
                   <div>
                     <span className="text-gray-600">Time:</span>
-                    <span className="ml-2 font-medium">
+                    <span className="ml-2 font-medium text-gray-900">
                       {exercise_spec.constraints.time_minutes} min
                     </span>
                   </div>
                   <div>
                     <span className="text-gray-600">Devices:</span>
-                    <span className="ml-2 font-medium">
+                    <span className="ml-2 font-medium text-gray-900">
                       {exercise_spec.constraints.devices}
                     </span>
                   </div>
