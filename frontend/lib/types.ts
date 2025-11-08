@@ -119,6 +119,7 @@ export interface Lab {
     exercise_spec?: ExerciseSpec;
     design_output?: DesignOutput;
     draft_lab_guide?: DraftLabGuide;
+    draft_lab_guide_markdown?: string | null;
     validation_result?: ValidationResult;
     patch_plan?: PatchPlan;
   };

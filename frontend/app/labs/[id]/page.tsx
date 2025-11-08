@@ -55,7 +55,7 @@ export default function LabDetailPage({
     );
   }
 
-  const { exercise_spec, design_output, draft_lab_guide, validation_result } =
+  const { exercise_spec, design_output, draft_lab_guide, draft_lab_guide_markdown, validation_result } =
     lab.progress;
 
   const isComplete = lab.status === 'completed' || lab.status === 'failed';
@@ -174,7 +174,12 @@ export default function LabDetailPage({
             )}
 
             {/* Lab guide panel */}
-            {draft_lab_guide && <GuidePanel guide={draft_lab_guide} />}
+            {draft_lab_guide_markdown && (
+              <GuidePanel
+                markdown={draft_lab_guide_markdown}
+                estimatedTime={draft_lab_guide?.estimated_time_minutes}
+              />
+            )}
 
             {/* Validation panel */}
             {validation_result && <ValidationPanel result={validation_result} />}
