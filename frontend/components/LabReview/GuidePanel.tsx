@@ -21,15 +21,15 @@ export function GuidePanel({ guide }: GuidePanelProps) {
         </div>
       </div>
 
-      <div className="prose prose-sm max-w-none">
-        <h1>{guide.title}</h1>
+      <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-800 prose-li:text-gray-800 [&_h1]:text-gray-900 [&_h2]:text-gray-900 [&_h3]:text-gray-900 [&_p]:text-gray-800 [&_li]:text-gray-800 [&_ul]:text-gray-800 [&_ol]:text-gray-800">
+        <h1 className="text-gray-900">{guide.title}</h1>
 
         {guide.objectives && guide.objectives.length > 0 && (
           <div>
-            <h2>Learning Objectives</h2>
-            <ul>
+            <h2 className="text-gray-900">Learning Objectives</h2>
+            <ul className="text-gray-800">
               {guide.objectives.map((obj, i) => (
-                <li key={i}>{obj}</li>
+                <li key={i} className="text-gray-800">{obj}</li>
               ))}
             </ul>
           </div>
@@ -37,10 +37,10 @@ export function GuidePanel({ guide }: GuidePanelProps) {
 
         {guide.prerequisites && guide.prerequisites.length > 0 && (
           <div>
-            <h2>Prerequisites</h2>
-            <ul>
+            <h2 className="text-gray-900">Prerequisites</h2>
+            <ul className="text-gray-800">
               {guide.prerequisites.map((prereq, i) => (
-                <li key={i}>{prereq}</li>
+                <li key={i} className="text-gray-800">{prereq}</li>
               ))}
             </ul>
           </div>
@@ -48,22 +48,78 @@ export function GuidePanel({ guide }: GuidePanelProps) {
 
         {guide.topology_description && (
           <div>
-            <h2>Network Topology</h2>
-            <p>{guide.topology_description}</p>
+            <h2 className="text-gray-900">Network Topology</h2>
+            <p className="text-gray-800">{guide.topology_description}</p>
+          </div>
+        )}
+
+        {guide.initial_setup && guide.initial_setup.length > 0 && (
+          <div>
+            <h2 className="text-gray-900">Initial Setup</h2>
+            <ol className="text-gray-800">
+              {guide.initial_setup.map((step, stepIdx) => (
+                <li key={stepIdx}>
+                  {step.type === 'cmd' && (
+                    <div>
+                      <strong>Command:</strong>{' '}
+                      <code className="bg-gray-100 px-2 py-1 rounded text-gray-900">
+                        {step.value}
+                      </code>
+                      {step.description && (
+                        <p className="text-sm text-gray-700 mt-1">
+                          {step.description}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {step.type === 'verify' && (
+                    <div>
+                      <strong>Verify:</strong>{' '}
+                      <code className="bg-blue-100 px-2 py-1 rounded text-gray-900">
+                        {step.value}
+                      </code>
+                      {step.description && (
+                        <p className="text-sm text-gray-700 mt-1">
+                          {step.description}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {step.type === 'note' && (
+                    <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
+                      <p className="text-sm text-gray-800">{step.value}</p>
+                    </div>
+                  )}
+                  {step.type === 'output' && (
+                    <div className="bg-gray-50 border-l-4 border-gray-400 p-3">
+                      <strong className="text-gray-900">Expected Output:</strong>
+                      <pre className="text-xs text-gray-800 mt-2 overflow-x-auto">
+                        {step.value}
+                      </pre>
+                      {step.description && (
+                        <p className="text-sm text-gray-700 mt-2">
+                          {step.description}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ol>
           </div>
         )}
 
         {guide.device_sections && guide.device_sections.length > 0 && guide.device_sections.map((device, idx) => (
           <div key={idx} className="mt-6">
-            <h2>Device: {device.device_name.toUpperCase()}</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-gray-900">Device: {device.device_name.toUpperCase()}</h2>
+            <p className="text-sm text-gray-800">
               Platform: {device.platform}
               {device.role && ` | Role: ${device.role}`}
             </p>
 
             {device.ip_table && Object.keys(device.ip_table).length > 0 && (
               <div className="my-4">
-                <h3>IP Addressing</h3>
+                <h3 className="text-gray-900">IP Addressing</h3>
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead>
                     <tr>
@@ -87,18 +143,18 @@ export function GuidePanel({ guide }: GuidePanelProps) {
               </div>
             )}
 
-            <h3>Configuration Steps</h3>
-            <ol>
+            <h3 className="text-gray-900">Configuration Steps</h3>
+            <ol className="text-gray-800">
               {device.steps && device.steps.length > 0 && device.steps.map((step, stepIdx) => (
                 <li key={stepIdx}>
                   {step.type === 'cmd' && (
                     <div>
                       <strong>Command:</strong>{' '}
-                      <code className="bg-gray-100 px-2 py-1 rounded">
+                      <code className="bg-gray-100 px-2 py-1 rounded text-gray-900">
                         {step.value}
                       </code>
                       {step.description && (
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-gray-700 mt-1">
                           {step.description}
                         </p>
                       )}
@@ -107,11 +163,11 @@ export function GuidePanel({ guide }: GuidePanelProps) {
                   {step.type === 'verify' && (
                     <div>
                       <strong>Verify:</strong>{' '}
-                      <code className="bg-blue-100 px-2 py-1 rounded">
+                      <code className="bg-blue-100 px-2 py-1 rounded text-gray-900">
                         {step.value}
                       </code>
                       {step.description && (
-                        <p className="text-sm text-gray-600 mt-1">
+                        <p className="text-sm text-gray-700 mt-1">
                           {step.description}
                         </p>
                       )}
@@ -119,7 +175,20 @@ export function GuidePanel({ guide }: GuidePanelProps) {
                   )}
                   {step.type === 'note' && (
                     <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
-                      <p className="text-sm">{step.value}</p>
+                      <p className="text-sm text-gray-800">{step.value}</p>
+                    </div>
+                  )}
+                  {step.type === 'output' && (
+                    <div className="bg-gray-50 border-l-4 border-gray-400 p-3">
+                      <strong className="text-gray-900">Expected Output:</strong>
+                      <pre className="text-xs text-gray-800 mt-2 overflow-x-auto">
+                        {step.value}
+                      </pre>
+                      {step.description && (
+                        <p className="text-sm text-gray-700 mt-2">
+                          {step.description}
+                        </p>
+                      )}
                     </div>
                   )}
                 </li>
@@ -130,15 +199,15 @@ export function GuidePanel({ guide }: GuidePanelProps) {
 
         {guide.final_verification && guide.final_verification.length > 0 && (
           <div>
-            <h2>Final Verification</h2>
-            <ul>
+            <h2 className="text-gray-900">Final Verification</h2>
+            <ul className="text-gray-800">
               {guide.final_verification.map((step, i) => (
                 <li key={i}>
-                  <code className="bg-blue-100 px-2 py-1 rounded">
+                  <code className="bg-blue-100 px-2 py-1 rounded text-gray-900">
                     {step.value}
                   </code>
                   {step.description && (
-                    <span className="ml-2 text-sm text-gray-600">
+                    <span className="ml-2 text-sm text-gray-700">
                       {step.description}
                     </span>
                   )}
@@ -150,10 +219,10 @@ export function GuidePanel({ guide }: GuidePanelProps) {
 
         {guide.troubleshooting_tips && guide.troubleshooting_tips.length > 0 && (
           <div>
-            <h2>Troubleshooting Tips</h2>
-            <ul>
+            <h2 className="text-gray-900">Troubleshooting Tips</h2>
+            <ul className="text-gray-800">
               {guide.troubleshooting_tips.map((tip, i) => (
-                <li key={i}>{tip}</li>
+                <li key={i} className="text-gray-800">{tip}</li>
               ))}
             </ul>
           </div>
