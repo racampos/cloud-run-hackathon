@@ -13,19 +13,19 @@ from adk_agents.session_state_writer import design_state_writer, draft_state_wri
 from adk_agents.rca import rca_agent, patch_router_agent
 
 
-def create_lab_pipeline(include_validation: bool = True, include_rca: bool = False, mock_validation_failure: bool = False) -> SequentialAgent:
+def create_lab_pipeline(include_validation: bool = True, include_rca: bool = False, mock_mode: str = None) -> SequentialAgent:
     """Create a lab creation pipeline.
 
     Args:
         include_validation: If True, includes Validator agent. If False, stops after Author.
         include_rca: If True, includes RCA retry loop for validation failures. Requires include_validation=True.
-        mock_validation_failure: If True, uses mock validator that always fails (for testing RCA). Requires include_validation=True.
+        mock_mode: Mock validation failure mode: "design", "instruction", "objectives", or None for real validation.
 
     Returns:
         SequentialAgent pipeline
     """
     # Create validator instance (mock or real)
-    validator = ValidatorAgent(mock_failure=mock_validation_failure) if mock_validation_failure else validator_agent
+    validator = ValidatorAgent(mock_mode=mock_mode) if mock_mode else validator_agent
 
     if include_validation and include_rca:
         # Create separate state writer instances for the retry loop

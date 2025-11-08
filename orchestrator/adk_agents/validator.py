@@ -35,7 +35,7 @@ class ValidatorAgent(BaseAgent):
     6. Writes validation_result to session state
     """
 
-    def __init__(self, mock_failure: bool = False):
+    def __init__(self, mock_mode: str = None):
         super().__init__(
             name="ValidatorAgent",
             description="Validates lab guides via headless Containerlab simulation"
@@ -45,7 +45,7 @@ class ValidatorAgent(BaseAgent):
         object.__setattr__(self, 'region', os.getenv("REGION", "us-central1"))
         object.__setattr__(self, 'bucket_name', os.getenv("GCS_BUCKET", "netgenius-artifacts-dev"))
         object.__setattr__(self, 'job_name', "headless-runner")
-        object.__setattr__(self, 'mock_failure', mock_failure)
+        object.__setattr__(self, 'mock_mode', mock_mode)
     def _yield_validation_event(self, context: InvocationContext, validation_result: dict):
         """Helper to yield validation result as an ADK Event with state persistence."""
         context.session.state["validation_result_json"] = json.dumps(validation_result)
@@ -63,31 +63,90 @@ class ValidatorAgent(BaseAgent):
 
         Yields ADK Events to persist validation results to session state.
         """
-        logger.info("validator_started", mock_failure=self.mock_failure)
+        logger.info("validator_started", mock_mode=self.mock_mode)
 
-        # Mock failure mode for testing RCA retry logic
-        if self.mock_failure:
-            logger.info("validator_mock_failure_mode")
-            validation_result = {
-                "execution_id": "mock-failure",
-                "success": False,
-                "summary": {
-                    "error": "Mock validation failure for RCA testing",
-                    "details": "IP addressing mismatch detected on R1 interface Gi0/0"
-                },
-                "device_outputs": {
-                    "R1": {
-                        "commands": ["show ip interface brief"],
-                        "outputs": ["GigabitEthernet0/0     192.168.1.100  YES manual up                    up"],
-                        "errors": ["Expected IP 192.168.1.1 but found 192.168.1.100"]
-                    }
-                },
-                "logs": ["[MOCK] Validation failed: IP mismatch on R1 Gi0/0"],
-                "mock": True
-            }
+        # Mock failure modes for testing RCA retry logic
+        if self.mock_mode:
+            logger.info("validator_mock_mode", mode=self.mock_mode)
 
-            # Write to context.state and yield Event to commit the state_delta
-            logger.info("validator_mock_failure_injected")
+            if self.mock_mode == "design":
+                # DESIGN error: Wrong password configured in enable secret
+                # This simulates a topology/config issue where the Designer generated incorrect initial configs
+                validation_result = {
+                    "execution_id": "mock-design-failure",
+                    "success": False,
+                    "summary": {
+                        "error": "Mock DESIGN validation failure",
+                        "details": "Enable secret password mismatch - configured as 'wrongpass' but lab guide expects 'class'"
+                    },
+                    "device_outputs": {
+                        "R1": {
+                            "commands": ["show running-config | include enable secret"],
+                            "outputs": ["enable secret 5 $1$abcd$wrongpasshash"],
+                            "errors": ["Enable secret configured as 'wrongpass' but expected 'class'"]
+                        }
+                    },
+                    "logs": ["[MOCK-DESIGN] Validation failed: Initial config has wrong enable secret"],
+                    "mock": True,
+                    "mock_mode": "design"
+                }
+            elif self.mock_mode == "instruction":
+                # INSTRUCTION error: Lab guide has wrong command syntax
+                # This simulates an Author error where the lab guide contains incorrect steps
+                validation_result = {
+                    "execution_id": "mock-instruction-failure",
+                    "success": False,
+                    "summary": {
+                        "error": "Mock INSTRUCTION validation failure",
+                        "details": "Lab guide contains incorrect command syntax: 'password enable' instead of 'enable secret'"
+                    },
+                    "device_outputs": {
+                        "R1": {
+                            "commands": ["password enable class"],
+                            "outputs": [],
+                            "errors": ["% Invalid input detected at '^' marker - command 'password enable' not recognized"]
+                        }
+                    },
+                    "logs": ["[MOCK-INSTRUCTION] Validation failed: Lab guide has syntax error in Task 1, Step 2"],
+                    "mock": True,
+                    "mock_mode": "instruction"
+                }
+            elif self.mock_mode == "objectives":
+                # OBJECTIVES error: Lab spec has unrealistic constraints
+                # This simulates a Planner error where the exercise spec is impossible to achieve
+                validation_result = {
+                    "execution_id": "mock-objectives-failure",
+                    "success": False,
+                    "summary": {
+                        "error": "Mock OBJECTIVES validation failure",
+                        "details": "Exercise spec requires password encryption service, but this is not included in learning objectives"
+                    },
+                    "device_outputs": {
+                        "R1": {
+                            "commands": ["show running-config | include service password-encryption"],
+                            "outputs": ["no service password-encryption"],
+                            "errors": ["Validation expects 'service password-encryption' but it's not configured"]
+                        }
+                    },
+                    "logs": ["[MOCK-OBJECTIVES] Validation failed: Missing 'service password-encryption' requirement in objectives"],
+                    "mock": True,
+                    "mock_mode": "objectives"
+                }
+            else:
+                # Invalid mock_mode
+                validation_result = {
+                    "execution_id": "mock-invalid-mode",
+                    "success": False,
+                    "summary": {
+                        "error": "Invalid mock_mode",
+                        "details": f"mock_mode '{self.mock_mode}' is not recognized. Valid values: design, instruction, objectives"
+                    },
+                    "device_outputs": {},
+                    "logs": [f"[MOCK-ERROR] Invalid mock_mode: {self.mock_mode}"],
+                    "mock": True
+                }
+
+            logger.info("validator_mock_failure_injected", mode=self.mock_mode)
             yield self._yield_validation_event(context, validation_result)
             return
 
@@ -487,4 +546,4 @@ class ValidatorAgent(BaseAgent):
 
 
 # Create singleton instance for use in pipeline (normal mode)
-validator_agent = ValidatorAgent(mock_failure=False)
+validator_agent = ValidatorAgent(mock_mode=None)
