@@ -6,8 +6,9 @@
 
 import Link from 'next/link';
 import { use } from 'react';
-import { useLabPolling } from '@/lib/hooks';
+import { useLabPolling, useSendMessage } from '@/lib/hooks';
 import { ProgressTracker } from '@/components/LabWizard/ProgressTracker';
+import ConversationPanel from '@/components/LabWizard/ConversationPanel';
 import { TopologyPanel } from '@/components/LabReview/TopologyPanel';
 import { ConfigsPanel } from '@/components/LabReview/ConfigsPanel';
 import { GuidePanel } from '@/components/LabReview/GuidePanel';
@@ -21,6 +22,11 @@ export default function LabDetailPage({
 }) {
   const resolvedParams = use(params);
   const { data: lab, isLoading, error } = useLabPolling(resolvedParams.id);
+  const sendMessage = useSendMessage();
+
+  const handleSendMessage = (content: string) => {
+    sendMessage.mutate({ labId: resolvedParams.id, content });
+  };
 
   if (isLoading) {
     return (
@@ -129,16 +135,29 @@ export default function LabDetailPage({
             )}
           </div>
 
-          {/* Right column - Review panels */}
+          {/* Right column - Conversation or Review panels */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Show message while in progress */}
-            {!isComplete && (
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  Lab generation in progress. Results will appear below as agents complete their work.
-                </p>
+            {/* Show conversation panel during Planner phase */}
+            {(lab.status === 'planner_running' || lab.status === 'awaiting_user_input') && (
+              <div className="h-[600px]">
+                <ConversationPanel
+                  conversation={lab.conversation}
+                  onSendMessage={handleSendMessage}
+                  isLoading={sendMessage.isPending}
+                />
               </div>
             )}
+
+            {/* Show message while other agents are in progress */}
+            {!isComplete &&
+              lab.status !== 'planner_running' &&
+              lab.status !== 'awaiting_user_input' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <p className="text-sm text-blue-800">
+                    Lab generation in progress. Results will appear below as agents complete their work.
+                  </p>
+                </div>
+              )}
 
             {/* Topology panel */}
             {design_output?.topology_yaml && (

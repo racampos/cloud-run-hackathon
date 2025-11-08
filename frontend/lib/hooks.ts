@@ -82,3 +82,20 @@ export function useSubmitFeedback() {
     },
   });
 }
+
+/**
+ * Hook to send a message to the interactive Planner
+ */
+export function useSendMessage() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ labId, content }: { labId: string; content: string }) =>
+      api.sendMessage(labId, content),
+    onSuccess: (_, variables) => {
+      // Invalidate lab data to refetch with updated conversation
+      queryClient.invalidateQueries({ queryKey: ['lab-status', variables.labId] });
+      queryClient.invalidateQueries({ queryKey: ['lab', variables.labId] });
+    },
+  });
+}

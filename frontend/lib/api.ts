@@ -9,11 +9,13 @@ import type {
   CreateLabResponse,
   LabListItem,
   LabStatus,
+  SendMessageRequest,
+  SendMessageResponse,
 } from './types';
 import { mockLabs } from './mockData';
 
 // Configuration
-const USE_MOCK_DATA = true; // Set to false when backend API is ready
+const USE_MOCK_DATA = false; // Set to false when backend API is ready
 const API_BASE_URL = process.env.NEXT_PUBLIC_ORCHESTRATOR_URL || 'http://localhost:8080';
 
 // Simulate network delay for realistic UX
@@ -27,21 +29,33 @@ export async function createLab(request: CreateLabRequest): Promise<CreateLabRes
     await delay(500);
     const labId = `lab_${Date.now()}`;
 
-    // Initialize mock lab
+    // Initialize mock lab with conversation
+    const initialMessage = {
+      role: 'user' as const,
+      content: request.prompt,
+      timestamp: new Date().toISOString(),
+    };
+
     mockLabs[labId] = {
       lab_id: labId,
-      status: 'pending',
-      current_agent: null,
+      status: 'planner_running',
+      current_agent: 'planner',
+      conversation: {
+        messages: [initialMessage],
+        awaiting_user_input: false,
+      },
       progress: {},
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       prompt: request.prompt,
     };
 
-    // Simulate pipeline progression
-    simulatePipelineProgress(labId, request.dry_run || false);
+    // Simulate initial Planner response
+    setTimeout(() => {
+      simulatePlannerResponse(labId);
+    }, 2000);
 
-    return { lab_id: labId, status: 'pending' };
+    return { lab_id: labId, status: 'planner_running' };
   }
 
   // Real API call (when backend is ready)
@@ -154,27 +168,137 @@ export async function submitFeedback(
 }
 
 /**
- * Simulate pipeline progression for mock data
- * Updates the lab status through different stages
+ * Send a message to the interactive Planner agent
  */
-function simulatePipelineProgress(labId: string, dryRun: boolean) {
+export async function sendMessage(
+  labId: string,
+  content: string
+): Promise<SendMessageResponse> {
+  if (USE_MOCK_DATA) {
+    await delay(800);
+    const lab = mockLabs[labId];
+    if (!lab) {
+      throw new Error('Lab not found');
+    }
+
+    // Add user message
+    const userMessage = {
+      role: 'user' as const,
+      content,
+      timestamp: new Date().toISOString(),
+    };
+    lab.conversation.messages.push(userMessage);
+    lab.conversation.awaiting_user_input = false;
+    lab.status = 'planner_running';
+    lab.current_agent = 'planner';
+    lab.updated_at = new Date().toISOString();
+
+    // Simulate Planner response after delay
+    setTimeout(() => {
+      simulatePlannerResponse(labId);
+    }, 2000);
+
+    return {
+      lab_id: labId,
+      status: lab.status,
+      conversation: lab.conversation,
+      progress: {
+        exercise_spec: lab.progress.exercise_spec,
+      },
+    };
+  }
+
+  // Real API call
+  const response = await fetch(`${API_BASE_URL}/api/labs/${labId}/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content } as SendMessageRequest),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to send message: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+
+/**
+ * Simulate Planner agent response with questions or completion
+ */
+function simulatePlannerResponse(labId: string) {
+  const lab = mockLabs[labId];
+  if (!lab) return;
+
+  const messageCount = lab.conversation.messages.length;
+
+  // First response: Ask a clarifying question
+  if (messageCount === 2) {
+    const assistantMessage = {
+      role: 'assistant' as const,
+      content:
+        "Thanks for that prompt! I'd like to clarify a few things:\n\n" +
+        "1. What difficulty level should this lab target? (CCNA, CCNP, CCIE)\n" +
+        "2. How many devices would you like in the topology?\n" +
+        "3. Should this lab include verification steps?\n\n" +
+        "Please provide your answers so I can create the perfect lab for your needs.",
+      timestamp: new Date().toISOString(),
+    };
+    lab.conversation.messages.push(assistantMessage);
+    lab.conversation.awaiting_user_input = true;
+    lab.status = 'awaiting_user_input';
+    lab.current_agent = 'planner';
+    lab.updated_at = new Date().toISOString();
+    return;
+  }
+
+  // Second response: Complete the exercise spec
+  if (messageCount === 4) {
+    const assistantMessage = {
+      role: 'assistant' as const,
+      content:
+        "Perfect! I have all the information I need. Creating your exercise specification now...",
+      timestamp: new Date().toISOString(),
+    };
+    lab.conversation.messages.push(assistantMessage);
+    lab.conversation.awaiting_user_input = false;
+    lab.status = 'planner_complete';
+    lab.current_agent = null;
+    lab.updated_at = new Date().toISOString();
+
+    // Add exercise spec
+    lab.progress.exercise_spec = {
+      title: 'Static Routing Lab',
+      objectives: [
+        'Configure basic IP addressing',
+        'Implement static routes',
+        'Verify connectivity with ping',
+      ],
+      constraints: { devices: 2, time_minutes: 30 },
+      level: 'CCNA',
+      prerequisites: ['Basic CLI navigation', 'IP addressing fundamentals'],
+    };
+
+    // Continue with rest of pipeline
+    setTimeout(() => {
+      simulateRestOfPipeline(labId);
+    }, 500);
+  }
+}
+
+/**
+ * Continue pipeline after Planner completes
+ */
+function simulateRestOfPipeline(labId: string) {
   const stages: Array<{ status: LabStatus; agent: string | null; delay: number }> = [
-    { status: 'planner_running', agent: 'planner', delay: 2000 },
-    { status: 'planner_complete', agent: null, delay: 500 },
     { status: 'designer_running', agent: 'designer', delay: 3000 },
     { status: 'designer_complete', agent: null, delay: 500 },
     { status: 'author_running', agent: 'author', delay: 4000 },
     { status: 'author_complete', agent: null, delay: 500 },
+    { status: 'validator_running', agent: 'validator', delay: 5000 },
+    { status: 'validator_complete', agent: null, delay: 500 },
+    { status: 'completed', agent: null, delay: 500 },
   ];
-
-  if (!dryRun) {
-    stages.push(
-      { status: 'validator_running', agent: 'validator', delay: 5000 },
-      { status: 'validator_complete', agent: null, delay: 500 }
-    );
-  }
-
-  stages.push({ status: 'completed', agent: null, delay: 500 });
 
   let cumulativeDelay = 0;
 
@@ -188,20 +312,6 @@ function simulatePipelineProgress(labId: string, dryRun: boolean) {
         lab.updated_at = new Date().toISOString();
 
         // Add mock outputs as stages complete
-        if (status === 'planner_complete') {
-          lab.progress.exercise_spec = {
-            title: 'Static Routing Lab',
-            objectives: [
-              'Configure basic IP addressing',
-              'Implement static routes',
-              'Verify connectivity with ping',
-            ],
-            constraints: { devices: 2, time_minutes: 30 },
-            level: 'CCNA',
-            prerequisites: ['Basic CLI navigation', 'IP addressing fundamentals'],
-          };
-        }
-
         if (status === 'designer_complete') {
           lab.progress.design_output = {
             topology_yaml: `devices:

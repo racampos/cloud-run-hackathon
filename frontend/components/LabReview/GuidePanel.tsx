@@ -53,7 +53,7 @@ export function GuidePanel({ guide }: GuidePanelProps) {
           </div>
         )}
 
-        {guide.device_sections.map((device, idx) => (
+        {guide.device_sections && guide.device_sections.length > 0 && guide.device_sections.map((device, idx) => (
           <div key={idx} className="mt-6">
             <h2>Device: {device.device_name.toUpperCase()}</h2>
             <p className="text-sm text-gray-600">
@@ -89,7 +89,7 @@ export function GuidePanel({ guide }: GuidePanelProps) {
 
             <h3>Configuration Steps</h3>
             <ol>
-              {device.steps.map((step, stepIdx) => (
+              {device.steps && device.steps.length > 0 && device.steps.map((step, stepIdx) => (
                 <li key={stepIdx}>
                   {step.type === 'cmd' && (
                     <div>

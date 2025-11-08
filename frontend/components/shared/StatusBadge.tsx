@@ -18,6 +18,8 @@ export function StatusBadge({ status, className = '' }: StatusBadgeProps) {
         return 'bg-red-100 text-red-800 border-red-300';
       case 'pending':
         return 'bg-gray-100 text-gray-800 border-gray-300';
+      case 'awaiting_user_input':
+        return 'bg-purple-100 text-purple-800 border-purple-300 animate-pulse';
       case 'planner_running':
       case 'designer_running':
       case 'author_running':

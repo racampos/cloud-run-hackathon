@@ -80,10 +80,23 @@ export interface PatchPlan {
   patch_instructions: string;
 }
 
+// Conversation types for interactive Planner
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string; // ISO 8601
+}
+
+export interface Conversation {
+  messages: ConversationMessage[];
+  awaiting_user_input: boolean;
+}
+
 // Lab status types
 export type LabStatus =
   | 'pending'
   | 'planner_running'
+  | 'awaiting_user_input'
   | 'planner_complete'
   | 'designer_running'
   | 'designer_complete'
@@ -101,6 +114,7 @@ export interface Lab {
   lab_id: string;
   status: LabStatus;
   current_agent?: string | null;
+  conversation: Conversation;
   progress: {
     exercise_spec?: ExerciseSpec;
     design_output?: DesignOutput;
@@ -131,4 +145,17 @@ export interface LabListItem {
   title?: string;
   status: LabStatus;
   created_at: string;
+}
+
+export interface SendMessageRequest {
+  content: string;
+}
+
+export interface SendMessageResponse {
+  lab_id: string;
+  status: LabStatus;
+  conversation: Conversation;
+  progress: {
+    exercise_spec?: ExerciseSpec;
+  };
 }
