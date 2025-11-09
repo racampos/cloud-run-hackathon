@@ -168,7 +168,7 @@ export async function submitFeedback(
 }
 
 /**
- * Send a message to the interactive Planner agent
+ * Send a message to the interactive Planner agent (OLD - deprecated)
  */
 export async function sendMessage(
   labId: string,
@@ -217,6 +217,71 @@ export async function sendMessage(
 
   if (!response.ok) {
     throw new Error(`Failed to send message: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Chat with Planner agent (NEW ARCHITECTURE)
+ */
+export async function chatWithPlanner(
+  labId: string,
+  message: string
+): Promise<ChatResponse> {
+  if (USE_MOCK_DATA) {
+    await delay(800);
+    const lab = mockLabs[labId];
+    if (!lab) {
+      throw new Error('Lab not found');
+    }
+
+    // Add user message to conversation
+    const userMessage = {
+      role: 'user' as const,
+      content: message,
+      timestamp: new Date().toISOString(),
+    };
+    lab.conversation.messages.push(userMessage);
+
+    // Simulate Planner response
+    const plannerResponse =
+      'Thank you! I have all the information I need to create your lab.';
+    const assistantMessage = {
+      role: 'assistant' as const,
+      content: plannerResponse,
+      timestamp: new Date().toISOString(),
+    };
+    lab.conversation.messages.push(assistantMessage);
+
+    // Mark as complete and trigger generation
+    lab.status = 'planner_complete';
+    lab.current_agent = null;
+
+    // Simulate generation starting
+    setTimeout(() => {
+      if (lab.status === 'planner_complete') {
+        simulateRestOfPipeline(labId);
+      }
+    }, 1000);
+
+    return {
+      done: true,
+      response: plannerResponse,
+      exercise_spec: lab.progress.exercise_spec,
+      generation_started: true,
+    };
+  }
+
+  // Real API call
+  const response = await fetch(`${API_BASE_URL}/api/labs/${labId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to chat with Planner: ${response.statusText}`);
   }
 
   return response.json();

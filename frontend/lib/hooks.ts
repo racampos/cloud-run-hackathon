@@ -84,7 +84,7 @@ export function useSubmitFeedback() {
 }
 
 /**
- * Hook to send a message to the interactive Planner
+ * Hook to send a message to the interactive Planner (OLD - deprecated)
  */
 export function useSendMessage() {
   const queryClient = useQueryClient();
@@ -94,6 +94,23 @@ export function useSendMessage() {
       api.sendMessage(labId, content),
     onSuccess: (_, variables) => {
       // Invalidate lab data to refetch with updated conversation
+      queryClient.invalidateQueries({ queryKey: ['lab-status', variables.labId] });
+      queryClient.invalidateQueries({ queryKey: ['lab', variables.labId] });
+    },
+  });
+}
+
+/**
+ * Hook to chat with Planner (NEW ARCHITECTURE)
+ */
+export function useChatWithPlanner() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ labId, message }: { labId: string; message: string }) =>
+      api.chatWithPlanner(labId, message),
+    onSuccess: (_, variables) => {
+      // Invalidate lab data to refetch with updated conversation and status
       queryClient.invalidateQueries({ queryKey: ['lab-status', variables.labId] });
       queryClient.invalidateQueries({ queryKey: ['lab', variables.labId] });
     },

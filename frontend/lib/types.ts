@@ -115,6 +115,10 @@ export interface Lab {
   status: LabStatus;
   current_agent?: string | null;
   conversation: Conversation;
+  latest_planner_update?: {
+    timestamp: string;
+    message: string;
+  } | null;
   progress: {
     exercise_spec?: ExerciseSpec;
     design_output?: DesignOutput;
@@ -159,4 +163,16 @@ export interface SendMessageResponse {
   progress: {
     exercise_spec?: ExerciseSpec;
   };
+}
+
+// New chat endpoint request/response types
+export interface ChatRequest {
+  message: string;
+}
+
+export interface ChatResponse {
+  done: boolean;
+  response: string;
+  exercise_spec?: ExerciseSpec;
+  generation_started?: boolean;
 }
