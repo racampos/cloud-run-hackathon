@@ -21,20 +21,41 @@ const stages = [
 
 export function ProgressTracker({ status, currentAgent }: ProgressTrackerProps) {
   const getStageStatus = (stageKey: string): 'pending' | 'running' | 'complete' | 'current' => {
-    if (status === 'completed') return 'complete';
+    if (status === 'completed' || status === 'failed') return 'complete';
 
-    if (currentAgent === stageKey || status === `${stageKey}_running`) {
-      return 'running';
-    }
-
+    // Check if this specific stage is complete
     if (status === `${stageKey}_complete`) {
       return 'complete';
     }
 
-    // Check if stage is before current
-    const currentIndex = stages.findIndex((s) => s.key === currentAgent);
+    // Check if currently running
+    if (currentAgent === stageKey || status === `${stageKey}_running`) {
+      return 'running';
+    }
+
+    // Get stage indices for comparison
     const stageIndex = stages.findIndex((s) => s.key === stageKey);
 
+    // Parse the current status to extract stage key
+    const statusMatch = status.match(/^(planner|designer|author|validator|rca)_(running|complete)$/);
+    if (statusMatch) {
+      const statusStageKey = statusMatch[1];
+      const statusPhase = statusMatch[2]; // 'running' or 'complete'
+      const statusStageIndex = stages.findIndex((s) => s.key === statusStageKey);
+
+      // If the previous stage just completed and this is the next stage, show as running
+      if (statusPhase === 'complete' && statusStageIndex === stageIndex - 1) {
+        return 'running';
+      }
+
+      // If status is for a later stage, this stage must be complete
+      if (statusStageIndex > stageIndex) {
+        return 'complete';
+      }
+    }
+
+    // Check if stage is before current agent
+    const currentIndex = stages.findIndex((s) => s.key === currentAgent);
     if (currentIndex !== -1 && stageIndex < currentIndex) {
       return 'complete';
     }
