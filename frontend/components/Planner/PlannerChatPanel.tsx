@@ -98,40 +98,48 @@ export function PlannerChatPanel({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {conversation.messages.map((message, index) => (
-          <div
-            key={index}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+        {conversation.messages
+          .filter((message) => {
+            // Filter out raw JSON exercise_spec messages since we show them formatted below
+            if (message.role === 'assistant' && message.content.includes('"title":') && message.content.includes('"objectives":')) {
+              return false;
+            }
+            return true;
+          })
+          .map((message, index) => (
             <div
-              className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100'
-              }`}
+              key={index}
+              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`text-xs font-medium mb-1 ${
-                  message.role === 'user' ? 'text-blue-100' : 'text-gray-600'
+                className={`max-w-[85%] rounded-lg px-4 py-3 ${
+                  message.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100'
                 }`}
               >
-                {message.role === 'user' ? 'You' : 'Planner'}
-              </div>
-              <div
-                className={`whitespace-pre-wrap text-sm ${
-                  message.role === 'user' ? 'text-white' : 'text-gray-900'
-                }`}
-              >
-                {message.content}
-              </div>
-              <div
-                className={`text-xs mt-1 ${
-                  message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
-                }`}
-              >
-                {new Date(message.timestamp).toLocaleTimeString()}
+                <div
+                  className={`text-xs font-medium mb-1 ${
+                    message.role === 'user' ? 'text-blue-100' : 'text-gray-600'
+                  }`}
+                >
+                  {message.role === 'user' ? 'You' : 'Planner'}
+                </div>
+                <div
+                  className={`whitespace-pre-wrap text-sm ${
+                    message.role === 'user' ? 'text-white' : 'text-gray-900'
+                  }`}
+                >
+                  {message.content}
+                </div>
+                <div
+                  className={`text-xs mt-1 ${
+                    message.role === 'user' ? 'text-blue-200' : 'text-gray-500'
+                  }`}
+                >
+                  {new Date(message.timestamp).toLocaleTimeString()}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
 
         {/* Exercise Spec Message (if available) */}
         {exerciseSpec && (
