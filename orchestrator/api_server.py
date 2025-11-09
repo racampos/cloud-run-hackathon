@@ -85,6 +85,9 @@ app.add_middleware(
 # In-memory storage (MVP)
 labs: Dict[str, dict] = {}
 
+# Global session service instance (shared across all requests)
+_session_service = None
+
 # ========== REQUEST/RESPONSE MODELS ==========
 
 class CreateLabRequest(BaseModel):
@@ -178,9 +181,42 @@ async def get_lab_status(lab_id: str):
     if lab_id not in labs:
         raise HTTPException(status_code=404, detail="Lab not found")
 
+    lab = labs[lab_id]
+
+    # If validation_result is null but status is completed/validator_complete,
+    # try to fetch it from session state
+    if (lab["progress"]["validation_result"] is None and
+        lab["status"] in ["completed", "validator_complete"]):
+        try:
+            global _session_service
+            if _session_service is None:
+                print(f"[DEBUG] session_service is None, cannot fetch validation_result")
+            else:
+                session_id = lab_id  # Use lab_id directly as session_id
+                print(f"[DEBUG] Fetching validation_result for session_id: {session_id}")
+                session = await _session_service.get_session(
+                    app_name="adk_agents",
+                    user_id="api",
+                    session_id=session_id
+                )
+                if session is None:
+                    print(f"[DEBUG] Session not found for session_id: {session_id}")
+                else:
+                    print(f"[DEBUG] Session state keys: {list(session.state.keys())}")
+                    validation_result_json = session.state.get("validation_result_json")
+                    print(f"[DEBUG] validation_result_json exists: {validation_result_json is not None}")
+                    if validation_result_json:
+                        lab["progress"]["validation_result"] = json.loads(validation_result_json)
+                        print(f"[DEBUG] Successfully set validation_result")
+        except Exception as e:
+            # If we can't fetch from session, just continue with null
+            print(f"[DEBUG] Exception fetching validation_result: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+
     # Return everything except internal queue
     return {
-        k: v for k, v in labs[lab_id].items()
+        k: v for k, v in lab.items()
         if k != "pending_messages"
     }
 
@@ -257,11 +293,14 @@ async def run_pipeline(
         from google.adk.sessions import InMemorySessionService
         from google.genai import types
 
-        # Initialize session
-        session_service = InMemorySessionService()
+        # Initialize global session service if not already created
+        global _session_service
+        if _session_service is None:
+            _session_service = InMemorySessionService()
+
         session_id = lab_id
 
-        await session_service.create_session(
+        await _session_service.create_session(
             app_name="adk_agents",
             user_id="api",
             session_id=session_id
@@ -271,7 +310,7 @@ async def run_pipeline(
         planner_runner = Runner(
             agent=planner_agent,
             app_name="adk_agents",
-            session_service=session_service
+            session_service=_session_service
         )
 
         # Add initial prompt to conversation
@@ -409,7 +448,7 @@ async def run_pipeline(
         designer_runner = Runner(
             agent=designer_agent,
             app_name="adk_agents",
-            session_service=session_service
+            session_service=_session_service
         )
 
         # Create trigger message for Designer
@@ -424,7 +463,7 @@ async def run_pipeline(
             new_message=designer_message
         ))
 
-        session = await session_service.get_session(
+        session = await _session_service.get_session(
             app_name="adk_agents",
             user_id="api",
             session_id=session_id
@@ -448,7 +487,7 @@ async def run_pipeline(
         author_runner = Runner(
             agent=author_agent,
             app_name="adk_agents",
-            session_service=session_service
+            session_service=_session_service
         )
 
         # Create trigger message for Author
@@ -463,7 +502,7 @@ async def run_pipeline(
             new_message=author_message
         ))
 
-        session = await session_service.get_session(
+        session = await _session_service.get_session(
             app_name="adk_agents",
             user_id="api",
             session_id=session_id
@@ -496,7 +535,7 @@ async def run_pipeline(
             validator_runner = Runner(
                 agent=validator_agent,
                 app_name="adk_agents",
-                session_service=session_service
+                session_service=_session_service
             )
 
             # Create trigger message for Validator
@@ -511,12 +550,17 @@ async def run_pipeline(
                 new_message=validator_message
             ))
 
-            session = await session_service.get_session(
-                app_name="adk_agents",
-                user_id="api",
-                session_id=session_id
-            )
-            labs[lab_id]["progress"]["validation_result"] = session.state.get("validation_result")
+            # Get validation_result directly from validator_agent instance variable
+            print(f"[DEBUG API] Retrieving validation result from validator_agent.last_validation_result")
+            validation_result = validator_agent.last_validation_result
+
+            if validation_result:
+                print(f"[DEBUG API] Found validation_result: execution_id={validation_result.get('execution_id')}, success={validation_result.get('success')}")
+                labs[lab_id]["progress"]["validation_result"] = validation_result
+            else:
+                print(f"[DEBUG API] WARNING: validator_agent.last_validation_result is None!")
+                labs[lab_id]["progress"]["validation_result"] = None
+
             labs[lab_id]["status"] = "validator_complete"
             labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
 

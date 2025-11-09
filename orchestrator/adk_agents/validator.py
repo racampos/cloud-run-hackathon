@@ -46,16 +46,23 @@ class ValidatorAgent(BaseAgent):
         object.__setattr__(self, 'bucket_name', os.getenv("GCS_BUCKET", "netgenius-artifacts-dev"))
         object.__setattr__(self, 'job_name', "headless-runner")
         object.__setattr__(self, 'mock_mode', mock_mode)
-    def _yield_validation_event(self, context: InvocationContext, validation_result: dict):
-        """Helper to yield validation result as an ADK Event with state persistence."""
-        context.session.state["validation_result_json"] = json.dumps(validation_result)
+        # Store last validation result for retrieval after run completes
+        object.__setattr__(self, 'last_validation_result', None)
+
+    def _create_validation_event(self, context: InvocationContext, validation_result: dict):
+        """Helper to create validation result Event and prepare state write."""
+        # Store the result in instance variable for later retrieval
+        object.__setattr__(self, 'last_validation_result', validation_result)
+
+        # Return both the event and the JSON to write (caller must write to state before yielding)
         status = "SUCCESS" if validation_result.get("success") else "FAILED"
-        return Event(
+        event = Event(
             author=self.name,
             content=Content(parts=[Part(
                 text=f"Validation {status}: execution_id={validation_result.get('execution_id', 'N/A')}"
             )])
         )
+        return event, json.dumps(validation_result)
 
 
     async def run_async(self, context: InvocationContext):
@@ -147,7 +154,9 @@ class ValidatorAgent(BaseAgent):
                 }
 
             logger.info("validator_mock_failure_injected", mode=self.mock_mode)
-            yield self._yield_validation_event(context, validation_result)
+            event, result_json = self._create_validation_event(context, validation_result)
+            context.session.state["validation_result_json"] = result_json
+            yield event
             return
 
         if not CLOUD_RUN_AVAILABLE:
@@ -204,7 +213,9 @@ class ValidatorAgent(BaseAgent):
                 },
                 "skipped": True
             }
-            yield self._yield_validation_event(context, validation_result)
+            event, result_json = self._create_validation_event(context, validation_result)
+            context.session.state["validation_result_json"] = result_json
+            yield event
             return
 
         # Parse JSON strings if needed (agents may output JSON wrapped in markdown)
@@ -225,7 +236,9 @@ class ValidatorAgent(BaseAgent):
                     "summary": {"error": f"Failed to parse draft_guide JSON: {str(e)}"},
                     "skipped": True
                 }
-                yield self._yield_validation_event(context, validation_result)
+                event, result_json = self._create_validation_event(context, validation_result)
+                context.session.state["validation_result_json"] = result_json
+                yield event
                 return
         elif isinstance(draft_guide, dict):
             logger.info("draft_guide_already_dict")
@@ -247,7 +260,9 @@ class ValidatorAgent(BaseAgent):
                     "summary": {"error": f"Failed to parse design_output JSON: {str(e)}"},
                     "skipped": True
                 }
-                yield self._yield_validation_event(context, validation_result)
+                event, result_json = self._create_validation_event(context, validation_result)
+                context.session.state["validation_result_json"] = result_json
+                yield event
                 return
         elif isinstance(design_output, dict):
             logger.info("design_output_already_dict")
@@ -270,7 +285,9 @@ class ValidatorAgent(BaseAgent):
                 "summary": {"error": f"Job submission failed: {str(e)}"},
                 "error": str(e)
             }
-            yield self._yield_validation_event(context, validation_result)
+            event, result_json = self._create_validation_event(context, validation_result)
+            context.session.state["validation_result_json"] = result_json
+            yield event
             return
 
         # 4. Poll for completion
@@ -286,7 +303,9 @@ class ValidatorAgent(BaseAgent):
                 "summary": {"error": f"Job polling failed: {str(e)}"},
                 "error": str(e)
             }
-            yield self._yield_validation_event(context, validation_result)
+            event, result_json = self._create_validation_event(context, validation_result)
+            context.session.state["validation_result_json"] = result_json
+            yield event
             return
 
         # 5. Fetch artifacts from GCS (use actual_execution_id from polling)
@@ -310,7 +329,9 @@ class ValidatorAgent(BaseAgent):
                 "summary": {"error": f"Artifact fetch failed: {str(e)}"},
                 "error": str(e)
             }
-            yield self._yield_validation_event(context, validation_result)
+            event, result_json = self._create_validation_event(context, validation_result)
+            context.session.state["validation_result_json"] = result_json
+            yield event
             return
 
         # 6. Write result to session state and yield Event
@@ -329,7 +350,10 @@ class ValidatorAgent(BaseAgent):
         )
 
         # Yield Event to commit validation result to session state
-        yield self._yield_validation_event(context, validation_result)
+        event, result_json = self._create_validation_event(context, validation_result)
+        context.session.state["validation_result_json"] = result_json
+        print(f"[DEBUG VALIDATOR] Writing validation_result_json to session state: {result_json[:200]}...")
+        yield event
 
     def _convert_payload(self, draft_guide: dict, design_output: dict) -> dict:
         """Convert lab guide and design to headless runner payload format.
