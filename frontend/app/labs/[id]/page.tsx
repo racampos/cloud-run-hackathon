@@ -100,9 +100,9 @@ export default function LabDetailPage({
   const hasGuide = !!draft_lab_guide_markdown;
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -127,9 +127,9 @@ export default function LabDetailPage({
       </header>
 
       {/* Main content - 2 panel layout */}
-      <main className="flex-1 flex overflow-hidden">
+      <main className="flex-1 flex overflow-hidden min-h-0">
         {/* Left Panel - Content Area (2/3) */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           {/* Content Tab Navigation */}
           <ContentTabNavigation
             activeTab={activeTab}
@@ -140,7 +140,7 @@ export default function LabDetailPage({
           />
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          <div className="flex-1 overflow-y-auto p-6 bg-gray-50 min-h-0">
             {activeTab === 'design' && (
               <>
                 {design_output ? (
@@ -226,7 +226,7 @@ export default function LabDetailPage({
         </div>
 
         {/* Right Panel - Planner Chat (1/3) */}
-        <div className="w-1/3 flex flex-col border-l border-gray-200 bg-white">
+        <div className="w-1/3 flex flex-col border-l border-gray-200 bg-white overflow-hidden min-h-0">
           <PlannerChatPanel
             conversation={lab.conversation}
             exerciseSpec={exercise_spec}
