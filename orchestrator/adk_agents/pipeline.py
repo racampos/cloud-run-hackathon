@@ -13,6 +13,47 @@ from adk_agents.session_state_writer import design_state_writer, draft_state_wri
 from adk_agents.rca import rca_agent, patch_router_agent
 
 
+def create_generation_pipeline(include_validation: bool = True, mock_mode: str = None) -> SequentialAgent:
+    """Create a generation pipeline that starts from Designer.
+
+    This pipeline assumes exercise_spec already exists in session.state
+    (created by Planner in a separate interaction).
+
+    Args:
+        include_validation: If True, includes Validator agent. If False, stops after Author.
+        mock_mode: Mock validation failure mode: "design", "instruction", "objectives", or None for real validation.
+
+    Returns:
+        SequentialAgent pipeline: Designer → Author → Validator (optional)
+    """
+    # Create validator instance (mock or real)
+    validator = ValidatorAgent(mock_mode=mock_mode) if mock_mode else validator_agent
+
+    if include_validation:
+        return SequentialAgent(
+            name="GenerationPipeline",
+            description="Lab generation from existing exercise_spec: Designer → Author → Validator",
+            sub_agents=[
+                designer_agent,       # Reads exercise_spec → design_output (with linting)
+                design_state_writer,  # Verify design_output in session state (flush point)
+                author_agent,         # Reads exercise_spec + design_output → draft_lab_guide (with linting)
+                draft_state_writer,   # Verify draft_lab_guide in session state (flush point)
+                validator             # Reads draft_lab_guide + design_output → validation_result
+            ]
+        )
+    else:
+        return SequentialAgent(
+            name="GenerationPipelineNoValidation",
+            description="Lab generation without headless validation: Designer → Author",
+            sub_agents=[
+                designer_agent,
+                design_state_writer,
+                author_agent,
+                draft_state_writer
+            ]
+        )
+
+
 def create_lab_pipeline(include_validation: bool = True, include_rca: bool = False, mock_mode: str = None) -> SequentialAgent:
     """Create a lab creation pipeline.
 

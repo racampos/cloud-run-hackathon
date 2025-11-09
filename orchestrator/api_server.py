@@ -260,6 +260,143 @@ async def list_labs():
     return result
 
 
+@app.post("/api/labs/{lab_id}/chat")
+async def chat_with_planner(lab_id: str, request: dict, background_tasks: BackgroundTasks):
+    """Interactive chat with Planner agent.
+
+    The Planner agent runs independently to gather requirements through Q&A.
+    When exercise_spec is ready, this endpoint automatically triggers the generation
+    pipeline in the background.
+
+    Args:
+        lab_id: Lab identifier (also used as session_id)
+        request: {"message": "user's message"}
+
+    Returns:
+        {
+            "done": bool,  # True if exercise_spec is ready and generation started
+            "response": str,  # Planner's response (question or completion message)
+            "exercise_spec": dict,  # Only present if done=True
+            "generation_started": bool  # Only present if done=True
+        }
+    """
+    if lab_id not in labs:
+        raise HTTPException(status_code=404, detail="Lab not found")
+
+    message = request.get("message", "")
+    if not message:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    # Import ADK components
+    from adk_agents.planner import planner_agent
+    from google.adk import Runner
+    from google.genai import types
+
+    # Create Planner runner (uses global session service)
+    global _session_service
+    planner_runner = Runner(
+        agent=planner_agent,
+        app_name="adk_agents",
+        session_service=_session_service
+    )
+
+    # Send user message to Planner
+    user_message = types.Content(
+        parts=[types.Part(text=message)],
+        role="user"
+    )
+
+    events = list(planner_runner.run(
+        user_id="api",
+        session_id=lab_id,
+        new_message=user_message
+    ))
+
+    # Get Planner's response
+    planner_response = ""
+    if events and events[-1].content:
+        planner_response = str(events[-1].content)
+
+    # Check if exercise_spec is ready
+    session = await _session_service.get_session(
+        app_name="adk_agents",
+        user_id="api",
+        session_id=lab_id
+    )
+
+    exercise_spec = session.state.get("exercise_spec")
+
+    if exercise_spec:
+        # Planner is done! Store exercise_spec in labs dict
+        labs[lab_id]["progress"]["exercise_spec"] = exercise_spec
+        labs[lab_id]["status"] = "planner_complete"
+        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+        # Auto-trigger generation pipeline in background
+        dry_run = labs[lab_id].get("dry_run", False)
+        background_tasks.add_task(run_generation_pipeline, lab_id, dry_run)
+
+        return {
+            "done": True,
+            "response": planner_response,
+            "exercise_spec": exercise_spec,
+            "generation_started": True
+        }
+    else:
+        # Planner needs more information
+        return {
+            "done": False,
+            "response": planner_response
+        }
+
+
+@app.post("/api/labs/{lab_id}/generate")
+async def start_generation(lab_id: str, background_tasks: BackgroundTasks):
+    """Start the generation pipeline after Planner completes.
+
+    This endpoint triggers Designer → Author → Validator pipeline.
+    Requires that exercise_spec exists in session.state.
+
+    Args:
+        lab_id: Lab identifier
+
+    Returns:
+        {"message": "Generation started", "lab_id": str}
+    """
+    if lab_id not in labs:
+        raise HTTPException(status_code=404, detail="Lab not found")
+
+    # Verify exercise_spec exists
+    global _session_service
+    session = await _session_service.get_session(
+        app_name="adk_agents",
+        user_id="api",
+        session_id=lab_id
+    )
+
+    if "exercise_spec" not in session.state:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot start generation: Planner hasn't completed yet (exercise_spec missing)"
+        )
+
+    # Check if already generating
+    if labs[lab_id]["status"] not in ["planner_complete", "completed", "failed"]:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Generation already in progress (status: {labs[lab_id]['status']})"
+        )
+
+    # Start generation pipeline in background
+    dry_run = labs[lab_id].get("dry_run", False)
+    background_tasks.add_task(run_generation_pipeline, lab_id, dry_run)
+
+    labs[lab_id]["status"] = "generation_starting"
+    labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+    return {"message": "Generation started", "lab_id": lab_id}
+
+
 # ========== BACKGROUND TASK ==========
 
 async def run_pipeline(
@@ -580,6 +717,154 @@ async def run_pipeline(
         labs[lab_id]["error"] = str(e)
         labs[lab_id]["current_agent"] = None
         labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+
+async def run_generation_pipeline(lab_id: str, dry_run: bool):
+    """Run the generation pipeline using ADK's SequentialAgent.
+
+    This function:
+    1. Sends canned progress messages to Planner's conversation
+    2. Runs Designer → Author → Validator using create_generation_pipeline()
+    3. Updates lab status as pipeline progresses
+
+    Args:
+        lab_id: Lab identifier (also session_id)
+        dry_run: If True, skip validation
+    """
+    try:
+        from adk_agents.pipeline import create_generation_pipeline
+        from google.adk import Runner
+        from google.adk.events import Event
+        from google.genai.types import Content, Part
+
+        global _session_service
+
+        # Helper to inject canned message into Planner's conversation
+        async def send_progress_update(message: str):
+            """Inject a canned progress message as if Planner said it."""
+            session = await _session_service.get_session(
+                app_name="adk_agents",
+                user_id="api",
+                session_id=lab_id
+            )
+
+            # Create assistant message from Planner
+            canned_content = Content(
+                parts=[Part(text=message)],
+                role="model"  # "model" = assistant role
+            )
+
+            canned_event = Event(
+                content=canned_content,
+                author="PedagogyPlanner"  # Match Planner's agent name
+            )
+
+            # Inject into conversation history
+            await _session_service.append_event(session, canned_event)
+
+            # Also store for frontend polling
+            labs[lab_id]["latest_planner_update"] = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "message": message
+            }
+
+        # Send initial progress message
+        await send_progress_update("Perfect! I have everything I need. Let me start creating your lab...")
+
+        # Create the generation pipeline
+        pipeline = create_generation_pipeline(include_validation=not dry_run)
+
+        # Create runner for the pipeline
+        pipeline_runner = Runner(
+            agent=pipeline,
+            app_name="adk_agents",
+            session_service=_session_service
+        )
+
+        # Update status
+        labs[lab_id]["status"] = "designer_running"
+        labs[lab_id]["current_agent"] = "designer"
+        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+        await send_progress_update("I'm now designing your network topology and initial configurations...")
+
+        # Trigger the pipeline (it will read exercise_spec from session.state)
+        trigger_message = Content(
+            parts=[Part(text="generate")],
+            role="user"
+        )
+
+        events = list(pipeline_runner.run(
+            user_id="api",
+            session_id=lab_id,
+            new_message=trigger_message
+        ))
+
+        # Pipeline complete! Update status based on where we are
+        labs[lab_id]["status"] = "author_running"
+        labs[lab_id]["current_agent"] = "author"
+        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+        await send_progress_update("Network design complete! Now writing your lab guide...")
+
+        # Get final session state
+        session = await _session_service.get_session(
+            app_name="adk_agents",
+            user_id="api",
+            session_id=lab_id
+        )
+
+        # Store outputs in labs dict
+        if "design_output" in session.state:
+            labs[lab_id]["progress"]["design_output"] = session.state["design_output"]
+
+        if "draft_lab_guide" in session.state:
+            labs[lab_id]["progress"]["draft_lab_guide"] = session.state["draft_lab_guide"]
+
+        labs[lab_id]["status"] = "author_complete"
+        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+        await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
+
+        # Check validation result if not dry_run
+        if not dry_run:
+            labs[lab_id]["status"] = "validator_running"
+            labs[lab_id]["current_agent"] = "validator"
+            labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+            # Get validation result from validator_agent instance
+            from adk_agents.validator import validator_agent
+            validation_result = validator_agent.last_validation_result
+
+            if validation_result:
+                labs[lab_id]["progress"]["validation_result"] = validation_result
+
+                if validation_result.get("success"):
+                    await send_progress_update("Excellent! Your lab passed validation and is ready to use 🎉")
+                else:
+                    await send_progress_update("Validation found some issues. Your lab is complete but may need manual review.")
+            else:
+                labs[lab_id]["progress"]["validation_result"] = None
+
+        # Final status
+        labs[lab_id]["status"] = "completed"
+        labs[lab_id]["current_agent"] = None
+        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+        if dry_run:
+            await send_progress_update("Your lab is ready! (Validation skipped in dry-run mode)")
+
+    except Exception as e:
+        labs[lab_id]["status"] = "failed"
+        labs[lab_id]["error"] = str(e)
+        labs[lab_id]["current_agent"] = None
+        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+
+        # Send failure message to Planner conversation
+        try:
+            await send_progress_update(f"I encountered an error while generating your lab: {str(e)}")
+        except:
+            pass  # Don't fail on notification failure
 
 
 # ========== STARTUP/SHUTDOWN ==========
