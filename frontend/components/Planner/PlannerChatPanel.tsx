@@ -5,6 +5,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { Conversation, ExerciseSpec, LabStatus } from '@/lib/types';
 
 interface PlannerChatPanelProps {
@@ -124,11 +126,19 @@ export function PlannerChatPanel({
                   {message.role === 'user' ? 'You' : 'Planner'}
                 </div>
                 <div
-                  className={`whitespace-pre-wrap text-sm ${
-                    message.role === 'user' ? 'text-white' : 'text-gray-900'
+                  className={`text-sm ${
+                    message.role === 'user' ? 'text-white whitespace-pre-wrap' : 'text-gray-900'
                   }`}
                 >
-                  {message.content}
+                  {message.role === 'user' ? (
+                    message.content
+                  ) : (
+                    <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-ul:text-gray-900 prose-li:text-gray-900">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                 </div>
                 <div
                   className={`text-xs mt-1 ${
