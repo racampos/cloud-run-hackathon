@@ -16,30 +16,7 @@ Built using Google ADK's multi-agent orchestration patterns powered by Gemini 2.
 
 ## Architecture
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                      Frontend (Next.js)                      │
-│              Interactive Lab Creation Interface              │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-┌────────────────────────┴─────────────────────────────────────┐
-│              Orchestrator (FastAPI + Google ADK)             │
-│                   Running on Cloud Run                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐     │
-│  │ Planner  │→ │ Designer │→ │  Author  │→ │ Validator │     │
-│  └──────────┘  └──────────┘  └──────────┘  └─────┬─────┘     │
-└──────────────────────────────────────────────────┼───────────┘
-                                                   │
-                                          ┌────────┴───────────┐
-                                          │  Headless Runner   │
-                                          │  (Private)         │
-                                          │  Cloud Run Job     │
-                                          └──────────┬─────────┘
-                                                     │
-                                          ┌──────────┴─────────┐
-                                          │    GCS Artifacts   │
-                                          └────────────────────┘
-```
+![High-Level Architecture](data/diagrams/architecture.png)
 
 ## Repository Structure
 
@@ -220,32 +197,20 @@ Executes complete lab simulation in isolated Cloud Run Job:
 
 See [API Documentation](docs/headless-runner-api.md) for details.
 
-## Example Workflow
+## Detailed Workflow
 
-```
-1. Instructor enters prompt: "Create a password configuration lab"
+The following diagram shows the complete end-to-end flow, including interactive Q&A, data structures passed between agents, and the Cloud Run Job integration:
 
-2. Planner (ADK LlmAgent) asks clarifying questions via multi-turn session:
-   - Which password types? (enable, console, VTY)
-   - How many routers?
-   - Target difficulty and time?
+![Detailed Flow Diagram](data/diagrams/flow-diagram.png)
 
-3. Designer (ADK LlmAgent with tools) creates validated outputs:
-   - Topology YAML with router(s)
-   - Initial configs (base setup)
-   - Target configs (with passwords configured)
+**Key highlights:**
 
-4. Author (ADK LlmAgent) writes structured markdown:
-   - Introduction and objectives
-   - Step-by-step instructions
-   - Verification commands
-
-5. Validator (Custom ADK Agent) runs simulation via external service:
-   - Triggers Cloud Run Job
-   - Applies configs and tests student steps
-   - Returns success/failure with detailed logs
-
-```
+1. **Planner Agent** conducts multi-turn Q&A with the user to gather requirements
+2. **Designer Agent** generates topology YAML and device configurations
+3. **Author Agent** creates the lab guide with step-by-step instructions
+4. **Validator Agent** packages everything into `specs.json`, uploads to GCS, and triggers the Cloud Run Job
+5. **Network Simulator** (Headless Runner) downloads the spec, runs the simulation, and uploads validation results back to GCS
+6. **Validator Agent** polls GCS for results and returns success/failure to the orchestrator
 
 ## Intelligent Auto-Retry System (RCA Agent)
 
@@ -262,10 +227,12 @@ The RCA system consists of two ADK agents working in tandem:
 This `LlmAgent` analyzes validation failures and classifies them into three categories:
 
 - **DESIGN** - Topology or configuration issues (e.g., missing interfaces, incorrect IP addressing)
+
   - Routes fix back to: **Designer agent**
   - Example: "Interface GigabitEthernet0/1 not configured on R1"
 
 - **INSTRUCTION** - Lab guide errors (e.g., wrong commands, missing steps, incorrect verification)
+
   - Routes fix back to: **Author agent**
   - Example: "Command `show ip route static` should be `show ip route` for verification"
 
@@ -334,6 +301,7 @@ The system uses ADK's session state to maintain context across retries, enabling
 The RCA agent system is **fully implemented** in the backend (`orchestrator/adk_agents/rca.py`) and **working**, but is not exposed in the frontend UI due to hackathon time constraints.
 
 **Current state:**
+
 - ✅ RCA agent implementation complete
 - ✅ Patch router implementation complete
 - ✅ PatchPlan schema defined
@@ -343,6 +311,7 @@ The RCA agent system is **fully implemented** in the backend (`orchestrator/adk_
 - ❌ Retry visualization not built
 
 **What's needed to expose it:**
+
 1. Frontend UI to show retry attempts and RCA analysis
 2. User controls for enabling/disabling auto-retry
 3. Progress indicators showing which agent is being re-invoked
