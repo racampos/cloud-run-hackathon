@@ -50,14 +50,9 @@ export default function LabDetailPage({
     if (!lab || lab.status === lastProcessedStatus) return;
 
     const statusMessages: Record<string, string> = {
-      'planner_complete': '✓ Requirements gathered',
       'designer_running': '⏳ Designing network topology...',
-      'designer_complete': '✓ Network designed',
       'author_running': '⏳ Writing lab guide...',
-      'author_complete': '✓ Lab guide written',
       'validator_running': '⏳ Validating lab exercise...',
-      'validator_complete': '✓ Validation complete',
-      'completed': '✓ Lab generation completed successfully!',
     };
 
     const message = statusMessages[lab.status];

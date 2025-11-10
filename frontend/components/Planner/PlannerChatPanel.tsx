@@ -80,14 +80,6 @@ export function PlannerChatPanel({
     return content.includes('"title":') && content.includes('"objectives":');
   };
 
-  // Check if message is a progress update
-  const isProgressMessage = (content: string) => {
-    return content.includes('✓') || content.includes('⏳') ||
-           content.toLowerCase().includes('designing') ||
-           content.toLowerCase().includes('writing') ||
-           content.toLowerCase().includes('validating');
-  };
-
   return (
     <div className="flex flex-col h-full bg-white border-l border-gray-200">
       {/* Header */}
@@ -164,9 +156,8 @@ export function PlannerChatPanel({
             return null;
           }
 
-          // Render progress updates as blue bubbles (check by timestamp first, then by content)
-          const isProgressUpdate = progressUpdateTimestamps.has(message.timestamp) ||
-                                  (message.role === 'assistant' && isProgressMessage(message.content));
+          // Render progress updates as blue bubbles (only if from our local progress tracking)
+          const isProgressUpdate = progressUpdateTimestamps.has(message.timestamp);
 
           if (isProgressUpdate) {
             return (
