@@ -104,20 +104,29 @@ async def fetch_validation_artifacts(
         transcript = json.loads(transcript_json)
 
         # Group transcript entries by device and format as readable text
+        # Track previous prompt for each device (prompt shows state AFTER command)
         device_transcripts = {}
+        device_last_prompt = {}
+
         for entry in transcript:
             device = entry.get("step", {}).get("device", "unknown")
             command = entry.get("step", {}).get("text", "")
             response_content = entry.get("resp", {}).get("content", "")
-            prompt = entry.get("resp", {}).get("prompt", "")
+            prompt_after = entry.get("resp", {}).get("prompt", "")
 
             if device not in device_transcripts:
                 device_transcripts[device] = []
+                # Initialize with first prompt (usually device name with #)
+                device_last_prompt[device] = f"{device}#"
 
-            # Format as readable command-response pair
-            device_transcripts[device].append(f"{prompt}{command}")
+            # Format as readable command-response pair using prompt BEFORE this command
+            prompt_before = device_last_prompt.get(device, f"{device}#")
+            device_transcripts[device].append(f"{prompt_before}{command}")
             if response_content:
                 device_transcripts[device].append(response_content)
+
+            # Update last prompt for next iteration
+            device_last_prompt[device] = prompt_after
 
         # Convert to text format for each device
         for device, lines in device_transcripts.items():
