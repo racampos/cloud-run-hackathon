@@ -13,6 +13,18 @@ REGION="us-central1"
 GCS_BUCKET="netgenius-artifacts-dev"
 CLOUD_RUN_JOB_NAME="headless-runner"
 
+# Load GOOGLE_API_KEY from .env if it exists
+if [ -f ".env" ]; then
+    export $(grep -v '^#' .env | grep GOOGLE_API_KEY | xargs)
+fi
+
+# Check if GOOGLE_API_KEY is set
+if [ -z "$GOOGLE_API_KEY" ]; then
+    echo -e "${RED}Error: GOOGLE_API_KEY not set${NC}"
+    echo "Please set GOOGLE_API_KEY in .env file or export it as an environment variable"
+    exit 1
+fi
+
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}NetGenius Orchestrator Deployment${NC}"
 echo -e "${GREEN}========================================${NC}"
@@ -71,7 +83,7 @@ gcloud run deploy $SERVICE_NAME \
   --timeout 3600 \
   --concurrency 80 \
   --max-instances 10 \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GCS_BUCKET=$GCS_BUCKET,CLOUD_RUN_JOB_NAME=$CLOUD_RUN_JOB_NAME,CLOUD_RUN_REGION=$REGION"
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=$PROJECT_ID,GCS_BUCKET=$GCS_BUCKET,CLOUD_RUN_JOB_NAME=$CLOUD_RUN_JOB_NAME,CLOUD_RUN_REGION=$REGION,GOOGLE_API_KEY=$GOOGLE_API_KEY"
 
 echo -e "${GREEN}✓ Service deployed${NC}"
 echo ""
