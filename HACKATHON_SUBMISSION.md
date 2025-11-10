@@ -123,6 +123,10 @@ The application showcases Cloud Run's versatility—running a stateful FastAPI s
 
 With proper error handling, retry logic (via ADK), artifact storage in GCS, and clean separation between public orchestrator and private simulation engine, the system is architected for real-world deployment.
 
+### 6. Intelligent Auto-Retry System (Backend Only)
+
+The RCA (Root Cause Analysis) agent automatically diagnoses validation failures and routes fixes back to the appropriate agent. When validation fails, the RCA agent classifies the issue as DESIGN (topology problem → Designer), INSTRUCTION (lab guide error → Author), or OBJECTIVES (spec issue → human escalation), then generates specific patch instructions for automatic retries. This feature is fully implemented in the backend using ADK's multi-agent orchestration but not yet exposed in the UI due to time constraints.
+
 ## What we learned
 
 ### About Google ADK

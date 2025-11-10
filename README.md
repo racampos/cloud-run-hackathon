@@ -247,6 +247,118 @@ See [API Documentation](docs/headless-runner-api.md) for details.
 
 ```
 
+## Intelligent Auto-Retry System (RCA Agent)
+
+### Vision
+
+One of the most challenging aspects of automated lab generation is handling validation failures. When a lab fails headless validation, determining **what went wrong** and **which agent should fix it** requires intelligent analysis. The RCA (Root Cause Analysis) agent addresses this by automatically diagnosing validation failures and orchestrating targeted fixes.
+
+### How It Works
+
+The RCA system consists of two ADK agents working in tandem:
+
+**1. RCA Agent (`create_rca_agent()`)**
+
+This `LlmAgent` analyzes validation failures and classifies them into three categories:
+
+- **DESIGN** - Topology or configuration issues (e.g., missing interfaces, incorrect IP addressing)
+  - Routes fix back to: **Designer agent**
+  - Example: "Interface GigabitEthernet0/1 not configured on R1"
+
+- **INSTRUCTION** - Lab guide errors (e.g., wrong commands, missing steps, incorrect verification)
+  - Routes fix back to: **Author agent**
+  - Example: "Command `show ip route static` should be `show ip route` for verification"
+
+- **OBJECTIVES** - Specification issues requiring human judgment (e.g., unrealistic time estimates, scope problems)
+  - Routes to: **Human escalation**
+  - Example: "Lab requires 90 minutes but spec estimates 30 minutes"
+
+The RCA agent outputs a **PatchPlan** structured as:
+
+```json
+{
+  "root_cause_type": "DESIGN",
+  "analysis": "Detailed explanation of what went wrong",
+  "target_agent": "designer",
+  "patch_instructions": "Specific guidance for the Designer to fix the issue",
+  "should_retry": true,
+  "confidence": "high"
+}
+```
+
+**2. Patch Router Agent (`create_patch_router_agent()`)**
+
+This `LlmAgent` takes the PatchPlan and routes it to the appropriate agent:
+
+- **If `target_agent == "designer"`**: Triggers Designer with patch instructions to regenerate topology/configs
+- **If `target_agent == "author"`**: Triggers Author with patch instructions to revise lab guide
+- **If `target_agent == "planner"`**: Escalates to human (OBJECTIVES issues require instructor approval)
+
+### ADK Implementation
+
+The RCA system showcases ADK's multi-agent orchestration capabilities:
+
+```python
+# From orchestrator/adk_agents/rca.py
+
+def create_rca_agent() -> LlmAgent:
+    """Analyzes validation failures and creates patch plans."""
+    return LlmAgent(
+        model="gemini-2.5-flash",
+        name="RCAAgent",
+        description="Analyzes validation failures and creates patch plans",
+        instruction="""
+Analyze validation failure and classify root cause:
+- DESIGN: Topology/config issues → Designer
+- INSTRUCTION: Lab guide errors → Author
+- OBJECTIVES: Spec problems → Human
+        """,
+        output_key="patch_plan",
+    )
+
+def create_patch_router_agent() -> LlmAgent:
+    """Routes patch plans to appropriate agents for fixes."""
+    return LlmAgent(
+        model="gemini-2.5-flash",
+        name="PatchRouterAgent",
+        description="Routes patch plans to appropriate agents",
+        instruction="Route based on target_agent field in patch_plan",
+        output_key="patch_result",
+    )
+```
+
+The system uses ADK's session state to maintain context across retries, enabling intelligent iteration until validation passes or maximum retries are reached.
+
+### Why It's Not in the UI (Yet)
+
+The RCA agent system is **fully implemented** in the backend (`orchestrator/adk_agents/rca.py`) and **working**, but is not exposed in the frontend UI due to hackathon time constraints.
+
+**Current state:**
+- ✅ RCA agent implementation complete
+- ✅ Patch router implementation complete
+- ✅ PatchPlan schema defined
+- ✅ Integration with Designer and Author agents ready
+- ❌ Frontend UI for retry progress not implemented
+- ❌ User controls for max retries not added
+- ❌ Retry visualization not built
+
+**What's needed to expose it:**
+1. Frontend UI to show retry attempts and RCA analysis
+2. User controls for enabling/disabling auto-retry
+3. Progress indicators showing which agent is being re-invoked
+4. Display of patch instructions and confidence levels
+
+### Future Plans
+
+In the short term, we plan to:
+
+1. **Add Retry UI**: Display RCA analysis and retry progress in the frontend
+2. **User Controls**: Let instructors set max retry attempts (default: 3)
+3. **Confidence Thresholds**: Only auto-retry on "high" confidence classifications
+4. **Retry History**: Show evolution of lab across retry iterations
+
+This feature demonstrates ADK's power in building sophisticated multi-agent systems with intelligent error recovery—a critical capability for production AI applications.
+
 ## License
 
 **Frontend & Orchestrator:** MIT License (open-source)
