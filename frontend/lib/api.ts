@@ -11,6 +11,7 @@ import type {
   LabStatus,
   SendMessageRequest,
   SendMessageResponse,
+  ChatResponse,
 } from './types';
 import { mockLabs } from './mockData';
 
