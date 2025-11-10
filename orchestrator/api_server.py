@@ -938,6 +938,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         labs[lab_id]["current_agent"] = "designer"
         labs[lab_id]["updated_at"] = utc_now()
         await send_progress_update("I'm now designing your network topology and initial configurations...")
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status
 
         designer_runner = Runner(
             agent=designer_agent,
@@ -983,7 +984,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         labs[lab_id]["current_agent"] = "author"
         labs[lab_id]["updated_at"] = utc_now()
         await send_progress_update("Network design complete! Now writing your lab guide...")
-        await asyncio.sleep(1.0)  # Ensure status is visible before agent starts
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status
 
         author_runner = Runner(
             agent=author_agent,
@@ -1013,6 +1014,17 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
             raw_draft_lab_guide = session.state["draft_lab_guide"]
             labs[lab_id]["progress"]["draft_lab_guide"] = extract_json_from_markdown(raw_draft_lab_guide)
 
+        # Read the generated markdown file from output directory
+        markdown_path = os.path.join(os.path.dirname(__file__), "output", "draft_lab_guide.md")
+        if os.path.exists(markdown_path):
+            with open(markdown_path, "r") as f:
+                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = f.read()
+        else:
+            labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
+
+        # Send progress message BEFORE setting author_complete status
+        await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
+
         labs[lab_id]["status"] = "author_complete"
         labs[lab_id]["updated_at"] = utc_now()
         await asyncio.sleep(2.0)  # Allow frontend to poll and see status
@@ -1025,7 +1037,6 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
             labs[lab_id]["updated_at"] = utc_now()
-            await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
 
             # Run validator
             validator_runner = Runner(
