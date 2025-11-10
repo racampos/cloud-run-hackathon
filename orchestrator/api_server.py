@@ -630,7 +630,7 @@ async def run_pipeline(
         labs[lab_id]["status"] = "designer_running"
         labs[lab_id]["current_agent"] = "designer"
         labs[lab_id]["updated_at"] = utc_now()
-        await asyncio.sleep(0.5)  # Allow frontend to poll and see status
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status and see status
 
         designer_runner = Runner(
             agent=designer_agent,
@@ -663,13 +663,13 @@ async def run_pipeline(
 
         labs[lab_id]["status"] = "designer_complete"
         labs[lab_id]["updated_at"] = utc_now()
-        await asyncio.sleep(0.5)  # Allow frontend to poll and see status
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status and see status
 
         # Author
         labs[lab_id]["status"] = "author_running"
         labs[lab_id]["current_agent"] = "author"
         labs[lab_id]["updated_at"] = utc_now()
-        await asyncio.sleep(0.5)  # Allow frontend to poll and see status
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status and see status
 
         author_runner = Runner(
             agent=author_agent,
@@ -710,14 +710,14 @@ async def run_pipeline(
 
         labs[lab_id]["status"] = "author_complete"
         labs[lab_id]["updated_at"] = utc_now()
-        await asyncio.sleep(0.5)  # Allow frontend to poll and see status
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status and see status
 
         # Validator (if not dry_run)
         if not dry_run:
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
             labs[lab_id]["updated_at"] = utc_now()
-            await asyncio.sleep(0.5)  # Allow frontend to poll and see status
+            await asyncio.sleep(2.0)  # Allow frontend to poll and see status and see status
 
             validator_runner = Runner(
                 agent=validator_agent,
@@ -821,41 +821,66 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         # Send initial progress message
         await send_progress_update("Perfect! I have everything I need. Let me start creating your lab...")
 
-        # Create the generation pipeline
-        pipeline = create_generation_pipeline(include_validation=not dry_run)
+        # Import agents
+        from adk_agents.designer import designer_agent
+        from adk_agents.author import author_agent
+        from adk_agents.validator import validator_agent
+        from google.genai import types
 
-        # Create runner for the pipeline
-        pipeline_runner = Runner(
-            agent=pipeline,
+        # ========== DESIGNER ==========
+        labs[lab_id]["status"] = "designer_running"
+        labs[lab_id]["current_agent"] = "designer"
+        labs[lab_id]["updated_at"] = utc_now()
+        await send_progress_update("I'm now designing your network topology and initial configurations...")
+
+        designer_runner = Runner(
+            agent=designer_agent,
             app_name="adk_agents",
             session_service=_session_service
         )
 
-        # Update status
-        labs[lab_id]["status"] = "designer_running"
-        labs[lab_id]["current_agent"] = "designer"
-        labs[lab_id]["updated_at"] = utc_now()
-
-        await send_progress_update("I'm now designing your network topology and initial configurations...")
-
-        # Trigger the pipeline (it will read exercise_spec from session.state)
-        trigger_message = Content(
-            parts=[Part(text="generate")],
+        designer_message = types.Content(
+            parts=[types.Part(text="start")],
             role="user"
         )
 
-        events = list(pipeline_runner.run(
+        list(designer_runner.run(
             user_id="api",
             session_id=lab_id,
-            new_message=trigger_message
+            new_message=designer_message
         ))
 
-        # Pipeline complete! Update status based on where we are
+        labs[lab_id]["status"] = "designer_complete"
+        labs[lab_id]["updated_at"] = utc_now()
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status
+
+        # ========== AUTHOR ==========
         labs[lab_id]["status"] = "author_running"
         labs[lab_id]["current_agent"] = "author"
         labs[lab_id]["updated_at"] = utc_now()
-
         await send_progress_update("Network design complete! Now writing your lab guide...")
+        await asyncio.sleep(1.0)  # Ensure status is visible before agent starts
+
+        author_runner = Runner(
+            agent=author_agent,
+            app_name="adk_agents",
+            session_service=_session_service
+        )
+
+        author_message = types.Content(
+            parts=[types.Part(text="start")],
+            role="user"
+        )
+
+        list(author_runner.run(
+            user_id="api",
+            session_id=lab_id,
+            new_message=author_message
+        ))
+
+        labs[lab_id]["status"] = "author_complete"
+        labs[lab_id]["updated_at"] = utc_now()
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status
 
         # Get final session state
         session = await _session_service.get_session(
@@ -871,19 +896,35 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         if "draft_lab_guide" in session.state:
             labs[lab_id]["progress"]["draft_lab_guide"] = session.state["draft_lab_guide"]
 
-        labs[lab_id]["status"] = "author_complete"
-        labs[lab_id]["updated_at"] = utc_now()
-
-        await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
+        # Note: Status updates and progress messages are now handled by monitor_and_run_pipeline()
+        # to ensure they happen at the right time during pipeline execution
 
         # Check validation result if not dry_run
         if not dry_run:
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
             labs[lab_id]["updated_at"] = utc_now()
+            await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
+
+            # Run validator
+            validator_runner = Runner(
+                agent=validator_agent,
+                app_name="adk_agents",
+                session_service=_session_service
+            )
+
+            validator_message = types.Content(
+                parts=[types.Part(text="start")],
+                role="user"
+            )
+
+            list(validator_runner.run(
+                user_id="api",
+                session_id=lab_id,
+                new_message=validator_message
+            ))
 
             # Get validation result from validator_agent instance
-            from adk_agents.validator import validator_agent
             validation_result = validator_agent.last_validation_result
 
             if validation_result:
@@ -895,6 +936,10 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
                     await send_progress_update("Validation found some issues. Your lab is complete but may need manual review.")
             else:
                 labs[lab_id]["progress"]["validation_result"] = None
+
+            labs[lab_id]["status"] = "validator_complete"
+            labs[lab_id]["updated_at"] = utc_now()
+            await asyncio.sleep(2.0)  # Allow frontend to poll and see status
 
         # Final status
         labs[lab_id]["status"] = "completed"
