@@ -120,7 +120,6 @@ GOOGLE_API_KEY=your_google_api_key_here
 - `REGION` - GCP region (default: `us-central1`)
 - `GCS_BUCKET` - GCS bucket for artifacts (default: `netgenius-artifacts-dev`)
 - `PORT` - Server port (default: `8081`)
-- `MOCK_LINTER` - Use mock linter responses (default: `true`)
 
 2. **Start the orchestrator:**
 
