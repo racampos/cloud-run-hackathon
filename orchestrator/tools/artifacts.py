@@ -30,7 +30,8 @@ class ValidationArtifacts:
     @property
     def success(self) -> bool:
         """Returns True if validation passed"""
-        return self.summary.get("status") == "PASS"
+        # Check both "status" field (old format) and "ok" field (current format)
+        return self.summary.get("status") == "PASS" or self.summary.get("ok") is True
 
     @property
     def total_steps(self) -> int:
