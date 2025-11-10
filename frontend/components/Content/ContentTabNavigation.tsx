@@ -6,7 +6,7 @@
 
 import type { LabStatus } from '@/lib/types';
 
-export type ContentTab = 'design' | 'guide';
+export type ContentTab = 'design' | 'guide' | 'validation';
 
 interface ContentTabNavigationProps {
   activeTab: ContentTab;
@@ -14,11 +14,13 @@ interface ContentTabNavigationProps {
   status: LabStatus;
   hasDesign: boolean;
   hasGuide: boolean;
+  hasValidation: boolean;
 }
 
 const tabs: Array<{ key: ContentTab; label: string }> = [
   { key: 'design', label: 'Lab Design' },
   { key: 'guide', label: 'Lab Guide' },
+  { key: 'validation', label: 'Lab Validation' },
 ];
 
 export function ContentTabNavigation({
@@ -27,6 +29,7 @@ export function ContentTabNavigation({
   status,
   hasDesign,
   hasGuide,
+  hasValidation,
 }: ContentTabNavigationProps) {
   const isTabEnabled = (tabKey: ContentTab): boolean => {
     if (tabKey === 'design') {
@@ -34,6 +37,9 @@ export function ContentTabNavigation({
     }
     if (tabKey === 'guide') {
       return hasGuide;
+    }
+    if (tabKey === 'validation') {
+      return hasValidation;
     }
     return false;
   };

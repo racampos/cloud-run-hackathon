@@ -13,6 +13,7 @@ import { PlannerChatPanel } from '@/components/Planner/PlannerChatPanel';
 import { ContentTabNavigation, type ContentTab } from '@/components/Content/ContentTabNavigation';
 import { LabDesignTab } from '@/components/Content/LabDesignTab';
 import { LabGuideTab } from '@/components/Content/LabGuideTab';
+import { LabValidationTab } from '@/components/Content/LabValidationTab';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 
 export default function LabDetailPage({
@@ -34,16 +35,20 @@ export default function LabDetailPage({
   // Auto-switch tabs when content becomes available
   useEffect(() => {
     if (lab) {
-      // Switch to design tab when design output is available
-      if (lab.progress.design_output && !lab.progress.draft_lab_guide_markdown) {
-        setActiveTab('design');
+      // Switch to validation tab when validation results are available
+      if (lab.progress.validation_result) {
+        setActiveTab('validation');
       }
       // Switch to guide tab when lab guide is available
       else if (lab.progress.draft_lab_guide_markdown) {
         setActiveTab('guide');
       }
+      // Switch to design tab when design output is available
+      else if (lab.progress.design_output) {
+        setActiveTab('design');
+      }
     }
-  }, [lab?.progress.design_output, lab?.progress.draft_lab_guide_markdown]);
+  }, [lab?.progress.design_output, lab?.progress.draft_lab_guide_markdown, lab?.progress.validation_result]);
 
   // Track status changes and create progress messages
   useEffect(() => {
@@ -105,6 +110,7 @@ export default function LabDetailPage({
 
   const hasDesign = !!design_output;
   const hasGuide = !!draft_lab_guide_markdown;
+  const hasValidation = !!validation_result;
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
@@ -144,6 +150,7 @@ export default function LabDetailPage({
             status={lab.status}
             hasDesign={hasDesign}
             hasGuide={hasGuide}
+            hasValidation={hasValidation}
           />
 
           {/* Tab Content */}
@@ -221,6 +228,45 @@ export default function LabDetailPage({
                         </svg>
                       </div>
                       <p className="text-gray-600 text-lg">Writing lab guide...</p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        The Planner will update you on progress →
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {activeTab === 'validation' && (
+              <>
+                {validation_result ? (
+                  <LabValidationTab validationResult={validation_result} />
+                ) : (
+                  <div className="bg-white border border-gray-200 rounded-lg p-12">
+                    <div className="text-center">
+                      <div className="text-gray-400 mb-4">
+                        <svg
+                          className="w-16 h-16 mx-auto animate-spin"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          />
+                        </svg>
+                      </div>
+                      <p className="text-gray-600 text-lg">Validating lab exercise...</p>
                       <p className="text-sm text-gray-500 mt-2">
                         The Planner will update you on progress →
                       </p>

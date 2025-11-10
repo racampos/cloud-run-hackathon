@@ -64,6 +64,7 @@ export interface ValidationResult {
   artifact_urls?: Record<string, string>;
   error_summary?: string | null;
   duration_seconds?: number | null;
+  device_outputs?: Record<string, string>; // device_name -> transcript
   summary?: {
     error?: string;
     passed_steps?: number;
