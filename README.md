@@ -18,6 +18,8 @@ Built using Google ADK's multi-agent orchestration patterns powered by Gemini 2.
 
 ![High-Level Architecture](data/diagrams/architecture.png)
 
+> **Note:** For a more detailed diagram showing the exact interaction between each component, including data structures and sequence flow, see the [Detailed Workflow](#detailed-workflow) section below.
+
 ## Repository Structure
 
 This repository contains **only the open-source orchestrator**. The validation and simulation service (referred to as headless runner in this README) is maintained in a separate private repository.
