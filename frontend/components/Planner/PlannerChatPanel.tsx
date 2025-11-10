@@ -201,7 +201,7 @@ export function PlannerChatPanel({
                   {message.role === 'user' ? (
                     message.content
                   ) : (
-                    <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-ul:text-gray-900 prose-li:text-gray-900">
+                    <div className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-900 prose-strong:text-gray-900 prose-code:text-gray-900 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-ul:text-gray-900 prose-ol:text-gray-900 prose-li:text-gray-900 prose-ol:list-decimal prose-ul:list-disc prose-li:ml-4">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                         {message.content}
                       </ReactMarkdown>
