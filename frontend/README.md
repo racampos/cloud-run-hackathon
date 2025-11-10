@@ -1,6 +1,6 @@
-# NetGenius Frontend
+# NetGenius Instructor Copilot - Frontend
 
-Web interface for the NetGenius AI-powered networking lab generator.
+Web interface for the NetGenius Instructor Copilot AI-powered networking lab generator.
 
 ## Tech Stack
 

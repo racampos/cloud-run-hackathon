@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NetGenius - AI Lab Generator",
-  description: "Automated networking lab creation for instructors",
+  title: "NetGenius Instructor Copilot - AI Lab Generator",
+  description: "Automated networking lab creation for instructors powered by Google ADK",
 };
 
 export default function RootLayout({
