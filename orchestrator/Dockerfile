@@ -20,5 +20,8 @@ COPY . .
 # Set Python path
 ENV PYTHONPATH=/app
 
-# Run the orchestrator
-ENTRYPOINT ["python", "main.py"]
+# Expose port 8080 (Cloud Run default)
+EXPOSE 8080
+
+# Run the API server with uvicorn
+CMD ["uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8080"]
