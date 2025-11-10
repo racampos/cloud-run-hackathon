@@ -664,6 +664,21 @@ async def run_pipeline(
 
         # ========== PHASE 2: AUTOMATED PIPELINE ==========
 
+        # Create a FRESH session for the generation pipeline to avoid ADK multi-turn bug
+        # This ensures Designer/Author/Validator always start with turn 1
+        generation_session_id = f"{lab_id}_generation"
+        print(f"[DEBUG] Creating fresh generation session: {generation_session_id}")
+        print(f"[DEBUG] exercise_spec: {str(exercise_spec)[:200]}...")
+
+        # Create fresh session WITH exercise_spec in initial state
+        await _session_service.create_session(
+            app_name="adk_agents",
+            user_id="api",
+            session_id=generation_session_id,
+            state={"exercise_spec": exercise_spec}  # Pass state during creation!
+        )
+        print(f"[DEBUG] Created generation session with exercise_spec in initial state")
+
         # Helper to send progress updates
         def send_progress_update(message: str):
             """Send a canned progress message to the conversation."""
@@ -699,22 +714,23 @@ async def run_pipeline(
             session_service=_session_service
         )
 
-        # Create trigger message for Designer
+        # Pass exercise_spec in the message since ADK agents can't read from session state
+        import json
         designer_message = types.Content(
-            parts=[types.Part(text="start")],
+            parts=[types.Part(text=f"Here is the exercise_spec:\n\n{json.dumps(exercise_spec, indent=2)}")],
             role="user"
         )
 
         events = list(designer_runner.run(
             user_id="api",
-            session_id=session_id,
+            session_id=generation_session_id,  # Use fresh session
             new_message=designer_message
         ))
 
         session = await _session_service.get_session(
             app_name="adk_agents",
             user_id="api",
-            session_id=session_id
+            session_id=generation_session_id  # Use fresh session
         )
 
         # Parse design_output from markdown-wrapped JSON to actual dict
@@ -747,14 +763,14 @@ async def run_pipeline(
 
         events = list(author_runner.run(
             user_id="api",
-            session_id=session_id,
+            session_id=generation_session_id,  # Use fresh session
             new_message=author_message
         ))
 
         session = await _session_service.get_session(
             app_name="adk_agents",
             user_id="api",
-            session_id=session_id
+            session_id=generation_session_id  # Use fresh session
         )
 
         # Parse draft_lab_guide from markdown-wrapped JSON to actual dict
@@ -796,7 +812,7 @@ async def run_pipeline(
 
             events = list(validator_runner.run(
                 user_id="api",
-                session_id=session_id,
+                session_id=generation_session_id,  # Use fresh session
                 new_message=validator_message
             ))
 
@@ -859,6 +875,34 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
         global _session_service
 
+        # ========== CREATE FRESH SESSION FOR GENERATION ==========
+        # This avoids the ADK multi-turn bug where agents don't reliably write to session.state
+        # when the session has multiple conversation turns (from Planner Q&A)
+        generation_session_id = f"{lab_id}_generation"
+        print(f"[DEBUG] Creating fresh generation session: {generation_session_id}")
+
+        # Get exercise_spec from Planner's session
+        planner_session = await _session_service.get_session(
+            app_name="adk_agents",
+            user_id="api",
+            session_id=lab_id
+        )
+
+        exercise_spec = planner_session.state.get("exercise_spec")
+        if not exercise_spec:
+            raise Exception("Cannot start generation: exercise_spec not found in Planner session")
+
+        print(f"[DEBUG] Got exercise_spec from Planner session: {str(exercise_spec)[:200]}...")
+
+        # Create fresh session WITH exercise_spec in initial state
+        await _session_service.create_session(
+            app_name="adk_agents",
+            user_id="api",
+            session_id=generation_session_id,
+            state={"exercise_spec": exercise_spec}  # Pass state during creation!
+        )
+        print(f"[DEBUG] Created generation session with exercise_spec in initial state")
+
         # Helper to inject canned message into Planner's conversation
         async def send_progress_update(message: str):
             """Inject a canned progress message as if Planner said it."""
@@ -901,16 +945,34 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
             session_service=_session_service
         )
 
+        # Pass exercise_spec in the message since ADK agents can't read from session state
+        import json
         designer_message = types.Content(
-            parts=[types.Part(text="start")],
+            parts=[types.Part(text=f"Here is the exercise_spec:\n\n{json.dumps(exercise_spec, indent=2)}")],
             role="user"
         )
 
         list(designer_runner.run(
             user_id="api",
-            session_id=lab_id,
+            session_id=generation_session_id,  # Use fresh session
             new_message=designer_message
         ))
+
+        # Check if Designer wrote to session state and copy to labs dict
+        check_session = await _session_service.get_session(
+            app_name="adk_agents",
+            user_id="api",
+            session_id=generation_session_id
+        )
+        print(f"[DEBUG] After Designer: session.state keys = {list(check_session.state.keys())}")
+        if "design_output" in check_session.state:
+            design_output_str = str(check_session.state['design_output'])
+            print(f"[DEBUG] design_output exists, length = {len(design_output_str)}")
+            print(f"[DEBUG] design_output content: {design_output_str[:500]}...")  # First 500 chars
+            # Copy to labs dict so status endpoint returns it
+            labs[lab_id]["progress"]["design_output"] = extract_json_from_markdown(check_session.state['design_output'])
+        else:
+            print(f"[DEBUG] WARNING: design_output NOT in session state after Designer!")
 
         labs[lab_id]["status"] = "designer_complete"
         labs[lab_id]["updated_at"] = utc_now()
@@ -936,29 +998,24 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
         list(author_runner.run(
             user_id="api",
-            session_id=lab_id,
+            session_id=generation_session_id,  # Use fresh session
             new_message=author_message
         ))
 
-        labs[lab_id]["status"] = "author_complete"
-        labs[lab_id]["updated_at"] = utc_now()
-        await asyncio.sleep(2.0)  # Allow frontend to poll and see status
-
-        # Get final session state
+        # Get session state and copy draft_lab_guide to labs dict BEFORE setting status
         session = await _session_service.get_session(
             app_name="adk_agents",
             user_id="api",
-            session_id=lab_id
+            session_id=generation_session_id  # Use fresh session
         )
-
-        # Store outputs in labs dict
-        if "design_output" in session.state:
-            raw_design_output = session.state["design_output"]
-            labs[lab_id]["progress"]["design_output"] = extract_json_from_markdown(raw_design_output)
 
         if "draft_lab_guide" in session.state:
             raw_draft_lab_guide = session.state["draft_lab_guide"]
             labs[lab_id]["progress"]["draft_lab_guide"] = extract_json_from_markdown(raw_draft_lab_guide)
+
+        labs[lab_id]["status"] = "author_complete"
+        labs[lab_id]["updated_at"] = utc_now()
+        await asyncio.sleep(2.0)  # Allow frontend to poll and see status
 
         # Note: Status updates and progress messages are now handled by monitor_and_run_pipeline()
         # to ensure they happen at the right time during pipeline execution
@@ -984,7 +1041,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
             list(validator_runner.run(
                 user_id="api",
-                session_id=lab_id,
+                session_id=generation_session_id,  # Use fresh session
                 new_message=validator_message
             ))
 
