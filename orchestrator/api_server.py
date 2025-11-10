@@ -32,6 +32,112 @@ def utc_now() -> str:
     return datetime.utcnow().isoformat() + 'Z'
 
 
+def generate_markdown_from_lab_guide(lab_guide: dict) -> str:
+    """Generate markdown from DraftLabGuide JSON structure.
+
+    Args:
+        lab_guide: Dictionary with lab guide data
+
+    Returns:
+        Formatted markdown string
+    """
+    if not lab_guide or not isinstance(lab_guide, dict):
+        return ""
+
+    md = []
+
+    # Title
+    md.append(f"# {lab_guide.get('title', 'Lab Guide')}\n")
+
+    # Estimated time and objectives
+    if 'estimated_time_minutes' in lab_guide:
+        md.append(f"**Estimated Time:** {lab_guide['estimated_time_minutes']} minutes\n")
+
+    if 'objectives' in lab_guide and lab_guide['objectives']:
+        md.append("## Learning Objectives\n")
+        for obj in lab_guide['objectives']:
+            md.append(f"- {obj}")
+        md.append("")
+
+    # Prerequisites
+    if 'prerequisites' in lab_guide and lab_guide['prerequisites']:
+        md.append("## Prerequisites\n")
+        for prereq in lab_guide['prerequisites']:
+            md.append(f"- {prereq}")
+        md.append("")
+
+    # Topology
+    if 'topology_description' in lab_guide:
+        md.append("## Network Topology\n")
+        md.append(f"{lab_guide['topology_description']}\n")
+
+    # Device sections
+    if 'device_sections' in lab_guide:
+        for device in lab_guide['device_sections']:
+            md.append(f"## Device: {device.get('device_name', 'Unknown')}\n")
+            if 'role' in device:
+                md.append(f"**Role:** {device['role']}\n")
+            if 'platform' in device:
+                md.append(f"**Platform:** {device['platform']}\n")
+
+            # IP table
+            if 'ip_table' in device and device['ip_table']:
+                md.append("### IP Addressing\n")
+                md.append("| Interface | IP Address |")
+                md.append("|-----------|------------|")
+                for intf, ip in device['ip_table'].items():
+                    md.append(f"| {intf} | {ip} |")
+                md.append("")
+
+            # Steps
+            if 'steps' in device and device['steps']:
+                md.append("### Configuration Steps\n")
+                for i, step in enumerate(device['steps'], 1):
+                    step_type = step.get('type', 'cmd')
+                    value = step.get('value', '')
+                    desc = step.get('description', '')
+
+                    if step_type == 'cmd':
+                        md.append(f"{i}. {desc if desc else 'Execute command'}")
+                        md.append(f"   ```")
+                        md.append(f"   {value}")
+                        md.append(f"   ```")
+                    elif step_type == 'verify':
+                        md.append(f"{i}. **Verification:** {desc if desc else 'Check status'}")
+                        md.append(f"   ```")
+                        md.append(f"   {value}")
+                        md.append(f"   ```")
+                    elif step_type == 'output':
+                        md.append(f"   **Expected output:**")
+                        md.append(f"   ```")
+                        md.append(f"   {value}")
+                        md.append(f"   ```")
+                    elif step_type == 'note':
+                        md.append(f"   > **Note:** {value}")
+                md.append("")
+
+    # Final verification
+    if 'final_verification' in lab_guide and lab_guide['final_verification']:
+        md.append("## Final Verification\n")
+        for i, step in enumerate(lab_guide['final_verification'], 1):
+            value = step.get('value', '')
+            desc = step.get('description', '')
+            md.append(f"{i}. {desc if desc else 'Run verification'}")
+            md.append(f"   ```")
+            md.append(f"   {value}")
+            md.append(f"   ```")
+        md.append("")
+
+    # Troubleshooting tips
+    if 'troubleshooting_tips' in lab_guide and lab_guide['troubleshooting_tips']:
+        md.append("## Troubleshooting Tips\n")
+        for tip in lab_guide['troubleshooting_tips']:
+            md.append(f"- {tip}")
+        md.append("")
+
+    return "\n".join(md)
+
+
 def extract_json_from_markdown(text: str) -> dict | None:
     """Extract JSON from markdown code block or raw JSON string.
 
@@ -773,13 +879,17 @@ async def run_pipeline(
         parsed_draft_lab_guide = extract_json_from_markdown(raw_draft_lab_guide)
         labs[lab_id]["progress"]["draft_lab_guide"] = parsed_draft_lab_guide
 
-        # Extract markdown from the draft_lab_guide JSON structure
+        # Generate markdown from the draft_lab_guide JSON structure
         if parsed_draft_lab_guide and isinstance(parsed_draft_lab_guide, dict):
+            # First try to get markdown from JSON (if agent included it)
             markdown_content = parsed_draft_lab_guide.get("markdown")
+            # If not present, generate it from the structured data
+            if not markdown_content:
+                markdown_content = generate_markdown_from_lab_guide(parsed_draft_lab_guide)
+                print(f"[DEBUG MARKDOWN] Generated markdown for {lab_id}: {len(markdown_content)} chars")
+            else:
+                print(f"[DEBUG MARKDOWN] Using markdown from JSON for {lab_id}: {len(markdown_content)} chars")
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = markdown_content
-            print(f"[DEBUG MARKDOWN] Extracted markdown for {lab_id}: {len(markdown_content) if markdown_content else 0} chars, has_markdown={markdown_content is not None}")
-            if parsed_draft_lab_guide and not markdown_content:
-                print(f"[DEBUG MARKDOWN] draft_lab_guide keys: {list(parsed_draft_lab_guide.keys())}")
         else:
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
             print(f"[DEBUG MARKDOWN] No parsed_draft_lab_guide for {lab_id}, type={type(parsed_draft_lab_guide)}")
@@ -1012,13 +1122,17 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
             parsed_draft_lab_guide = extract_json_from_markdown(raw_draft_lab_guide)
             labs[lab_id]["progress"]["draft_lab_guide"] = parsed_draft_lab_guide
 
-            # Extract markdown from the draft_lab_guide JSON structure
+            # Generate markdown from the draft_lab_guide JSON structure
             if parsed_draft_lab_guide and isinstance(parsed_draft_lab_guide, dict):
+                # First try to get markdown from JSON (if agent included it)
                 markdown_content = parsed_draft_lab_guide.get("markdown")
+                # If not present, generate it from the structured data
+                if not markdown_content:
+                    markdown_content = generate_markdown_from_lab_guide(parsed_draft_lab_guide)
+                    print(f"[DEBUG MARKDOWN CHAT] Generated markdown for {lab_id}: {len(markdown_content)} chars")
+                else:
+                    print(f"[DEBUG MARKDOWN CHAT] Using markdown from JSON for {lab_id}: {len(markdown_content)} chars")
                 labs[lab_id]["progress"]["draft_lab_guide_markdown"] = markdown_content
-                print(f"[DEBUG MARKDOWN CHAT] Extracted markdown for {lab_id}: {len(markdown_content) if markdown_content else 0} chars, has_markdown={markdown_content is not None}")
-                if parsed_draft_lab_guide and not markdown_content:
-                    print(f"[DEBUG MARKDOWN CHAT] draft_lab_guide keys: {list(parsed_draft_lab_guide.keys())}")
             else:
                 labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
                 print(f"[DEBUG MARKDOWN CHAT] No parsed_draft_lab_guide for {lab_id}, type={type(parsed_draft_lab_guide)}")
