@@ -13,6 +13,7 @@ User Prompt → Planner → Designer → Author → Validator → Output
 ### Agents
 
 1. **Planner Agent** (`adk_agents/planner.py`)
+
    - Type: `LlmAgent` with Gemini 2.5 Flash
    - Purpose: Interactive Q&A to gather complete lab requirements
    - Input: User's initial prompt (e.g., "teach static routing")
@@ -20,6 +21,7 @@ User Prompt → Planner → Designer → Author → Validator → Output
    - Features: Multi-turn conversation, Deep Research-style interaction
 
 2. **Designer Agent** (`adk_agents/designer.py`)
+
    - Type: `LlmAgent` with Gemini 2.5 Flash + BuiltInPlanner
    - Purpose: Create network topology and configurations
    - Input: `ExerciseSpec` from Planner
@@ -28,6 +30,7 @@ User Prompt → Planner → Designer → Author → Validator → Output
    - Features: Automatic validation and retry on linting errors
 
 3. **Author Agent** (`adk_agents/author.py`)
+
    - Type: `LlmAgent` with Gemini 2.5 Flash
    - Purpose: Write student-facing lab guide
    - Input: `ExerciseSpec` + `DesignOutput`
@@ -45,6 +48,7 @@ User Prompt → Planner → Designer → Author → Validator → Output
 ### Pipeline
 
 **Sequential Pipeline** (`adk_agents/pipeline.py`):
+
 - Orchestrates all four agents in order
 - Each agent reads from and writes to session state
 - Automatic data flow: Planner → Designer → Author → Validator
@@ -62,6 +66,7 @@ pip install -r requirements.txt
 ```
 
 This installs:
+
 - `google-adk>=1.17.0`
 - Google Cloud libraries
 - Pydantic, Rich, Click, etc.
@@ -87,6 +92,7 @@ python test_adk_setup.py
 ```
 
 Expected output:
+
 ```
 ✓ GOOGLE_API_KEY found
 ✓ google.adk imported successfully
@@ -105,6 +111,7 @@ python main_adk.py create
 ```
 
 Interactive mode:
+
 ```
 What lab would you like to create? teach static routing
 
@@ -187,12 +194,15 @@ design_output = session.state.get("design_output")
 ADK automatically manages state across agents via `session.state`:
 
 1. **After Planner**:
+
    - `session.state["exercise_spec"]` = ExerciseSpec JSON
 
 2. **After Designer**:
+
    - `session.state["design_output"]` = DesignOutput JSON
 
 3. **After Author**:
+
    - `session.state["draft_lab_guide"]` = DraftLabGuide JSON
 
 4. **After Validator**:
@@ -221,16 +231,16 @@ orchestrator/
 
 ## Differences from Legacy Implementation
 
-| Aspect | Legacy (`agents/`) | ADK (`adk_agents/`) |
-|--------|-------------------|---------------------|
-| LLM Integration | None (templates only) | Gemini 2.5 Flash via ADK |
-| Planner UX | Template-based extraction | Multi-turn Q&A (Deep Research style) |
-| Designer | Template generation | LLM-generated with validation retry |
-| Author | Template generation | LLM-generated instructions |
-| Validator | Direct Cloud Run API | ADK BaseAgent wrapper |
-| Orchestration | Custom async workflow | ADK SequentialAgent |
-| State Management | Manual dict passing | ADK session.state (automatic) |
-| Tool Integration | Direct function calls | ADK tool wrapping |
+| Aspect           | Legacy (`agents/`)        | ADK (`adk_agents/`)                  |
+| ---------------- | ------------------------- | ------------------------------------ |
+| LLM Integration  | None (templates only)     | Gemini 2.5 Flash via ADK             |
+| Planner UX       | Template-based extraction | Multi-turn Q&A (Deep Research style) |
+| Designer         | Template generation       | LLM-generated with validation retry  |
+| Author           | Template generation       | LLM-generated instructions           |
+| Validator        | Direct Cloud Run API      | ADK BaseAgent wrapper                |
+| Orchestration    | Custom async workflow     | ADK SequentialAgent                  |
+| State Management | Manual dict passing       | ADK session.state (automatic)        |
+| Tool Integration | Direct function calls     | ADK tool wrapping                    |
 
 ## ADK Features Used
 
@@ -254,27 +264,24 @@ orchestrator/
 ## Troubleshooting
 
 **"GOOGLE_API_KEY not found"**
+
 - Add API key to `orchestrator/.env`
 - Get key from https://aistudio.google.com/app/apikey
 
 **"Failed to import google.adk"**
+
 - Run `pip install google-adk`
 - Ensure using Python 3.10+
 
 **Linter returns errors**
+
 - Parser-linter service must be deployed
 - Update `PARSER_LINTER_URL` in `.env`
 - For testing, use `--dry-run` mode
 
 **Validation fails**
+
 - Headless-runner service must be deployed
 - Check GCP credentials and permissions
 - Verify GCS bucket exists
 - Use `--dry-run` to skip validation
-
-## Documentation
-
-- ADK Integration Plan: `docs/ADK_INTEGRATION_PLAN.md`
-- Interactive Planner Guide: `docs/ADK_INTERACTIVE_PLANNER.md`
-- Implementation Plan: `IMPLEMENTATION_PLAN.md`
-- Setup Instructions: `docs/SETUP_INSTRUCTIONS.md`
