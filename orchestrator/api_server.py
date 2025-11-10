@@ -23,6 +23,15 @@ from dotenv import load_dotenv
 
 # ========== UTILITY FUNCTIONS ==========
 
+def utc_now() -> str:
+    """Get current UTC timestamp in ISO format with explicit 'Z' suffix.
+
+    Returns timestamps like: 2025-11-10T00:40:00.123456Z
+    The 'Z' suffix explicitly indicates this is a UTC timestamp.
+    """
+    return datetime.utcnow().isoformat() + 'Z'
+
+
 def extract_json_from_markdown(text: str) -> dict | None:
     """Extract JSON from markdown code block or raw JSON string.
 
@@ -133,8 +142,8 @@ async def create_lab(request: CreateLabRequest, background_tasks: BackgroundTask
             "validation_result": None,
             "patch_plan": None
         },
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "created_at": utc_now(),
+        "updated_at": utc_now(),
         "prompt": request.prompt,
         "pending_messages": deque(),
         "error": None
@@ -166,7 +175,7 @@ async def send_message(lab_id: str, message: UserMessage):
 
     # Add message to queue (background task is waiting for this)
     labs[lab_id]["pending_messages"].append(message.content)
-    labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+    labs[lab_id]["updated_at"] = utc_now()
 
     return {
         "status": "message_received",
@@ -182,43 +191,84 @@ async def get_lab_status(lab_id: str):
         raise HTTPException(status_code=404, detail="Lab not found")
 
     lab = labs[lab_id]
+    global _session_service
 
-    # If validation_result is null but status is completed/validator_complete,
-    # try to fetch it from session state
-    if (lab["progress"]["validation_result"] is None and
-        lab["status"] in ["completed", "validator_complete"]):
-        try:
-            global _session_service
-            if _session_service is None:
-                print(f"[DEBUG] session_service is None, cannot fetch validation_result")
-            else:
-                session_id = lab_id  # Use lab_id directly as session_id
-                print(f"[DEBUG] Fetching validation_result for session_id: {session_id}")
-                session = await _session_service.get_session(
-                    app_name="adk_agents",
-                    user_id="api",
-                    session_id=session_id
-                )
-                if session is None:
-                    print(f"[DEBUG] Session not found for session_id: {session_id}")
-                else:
-                    print(f"[DEBUG] Session state keys: {list(session.state.keys())}")
+    # Fetch conversation history from ADK session.events (NEW architecture)
+    conversation_messages = []
+    try:
+        if _session_service is not None:
+            session = await _session_service.get_session(
+                app_name="adk_agents",
+                user_id="api",
+                session_id=lab_id
+            )
+
+            if session is not None:
+                # Convert ADK session.events to conversation messages
+                # Note: We generate timestamps based on event order and current time
+                # to ensure consistent UTC timestamps across all messages
+                base_time = datetime.fromisoformat(lab["created_at"].replace('Z', '+00:00'))
+                time_offset_seconds = 0
+
+                for idx, event in enumerate(session.events):
+                    if event.content and event.content.parts:
+                        # Extract text from parts
+                        text_content = ""
+                        for part in event.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                text_content += part.text
+
+                        if text_content:
+                            # Map ADK roles to chat roles
+                            role = "assistant" if event.content.role == "model" else "user"
+
+                            # Filter out internal messages that shouldn't be shown to users
+                            # 1. Trigger messages like "start", "generate"
+                            # 2. Validation failure messages with execution IDs
+                            # 3. Messages wrapped in triple backticks (duplicates of structured data)
+                            if role == "user" and text_content.strip().lower() in ["start", "generate"]:
+                                continue
+                            if "Validation FAILED: execution_id=" in text_content:
+                                continue
+                            if text_content.strip().startswith("```json") or text_content.strip().startswith("```"):
+                                # Skip if it's a markdown-wrapped version of structured data
+                                # (the actual structured data is already in progress fields)
+                                continue
+
+                            # Generate timestamp: increment by 1 second per message from lab creation time
+                            # This preserves chronological order while using UTC timestamps
+                            from datetime import timedelta
+                            message_time = base_time + timedelta(seconds=time_offset_seconds)
+                            time_offset_seconds += 1
+
+                            conversation_messages.append({
+                                "role": role,
+                                "content": text_content,
+                                "timestamp": message_time.isoformat() + 'Z'  # Explicit UTC marker
+                            })
+
+                # If validation_result is null, try to fetch from session state
+                if (lab["progress"]["validation_result"] is None and
+                    lab["status"] in ["completed", "validator_complete"]):
                     validation_result_json = session.state.get("validation_result_json")
-                    print(f"[DEBUG] validation_result_json exists: {validation_result_json is not None}")
                     if validation_result_json:
                         lab["progress"]["validation_result"] = json.loads(validation_result_json)
-                        print(f"[DEBUG] Successfully set validation_result")
-        except Exception as e:
-            # If we can't fetch from session, just continue with null
-            print(f"[DEBUG] Exception fetching validation_result: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+    except Exception as e:
+        print(f"[DEBUG] Exception fetching session data: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
 
-    # Return everything except internal queue
-    return {
-        k: v for k, v in lab.items()
-        if k != "pending_messages"
-    }
+    # Build response
+    response = {k: v for k, v in lab.items() if k != "pending_messages"}
+
+    # Replace conversation with ADK-based messages if available, otherwise use existing
+    if conversation_messages:
+        response["conversation"] = {
+            "messages": conversation_messages,
+            "awaiting_user_input": lab.get("conversation", {}).get("awaiting_user_input", False)
+        }
+
+    return response
 
 
 @app.get("/api/labs/{lab_id}")
@@ -330,7 +380,7 @@ async def chat_with_planner(lab_id: str, request: dict, background_tasks: Backgr
         # Planner is done! Store exercise_spec in labs dict
         labs[lab_id]["progress"]["exercise_spec"] = exercise_spec
         labs[lab_id]["status"] = "planner_complete"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         # Auto-trigger generation pipeline in background
         dry_run = labs[lab_id].get("dry_run", False)
@@ -392,7 +442,7 @@ async def start_generation(lab_id: str, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_generation_pipeline, lab_id, dry_run)
 
     labs[lab_id]["status"] = "generation_starting"
-    labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+    labs[lab_id]["updated_at"] = utc_now()
 
     return {"message": "Generation started", "lab_id": lab_id}
 
@@ -422,7 +472,7 @@ async def run_pipeline(
 
         labs[lab_id]["status"] = "planner_running"
         labs[lab_id]["current_agent"] = "planner"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         # Import ADK components
         from adk_agents.planner import planner_agent
@@ -454,7 +504,7 @@ async def run_pipeline(
         labs[lab_id]["conversation"]["messages"].append({
             "role": "user",
             "content": initial_prompt,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": utc_now()
         })
 
         # Prepare first message
@@ -509,9 +559,9 @@ async def run_pipeline(
                     labs[lab_id]["conversation"]["messages"].append({
                         "role": "assistant",
                         "content": agent_response,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": utc_now()
                     })
-                    labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+                    labs[lab_id]["updated_at"] = utc_now()
                 else:
                     print(f"[DEBUG] WARNING: No agent response on turn {turn_count}!")
 
@@ -528,7 +578,7 @@ async def run_pipeline(
                             labs[lab_id]["progress"]["exercise_spec"] = exercise_spec
                             labs[lab_id]["status"] = "planner_complete"
                             labs[lab_id]["conversation"]["awaiting_user_input"] = False
-                            labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+                            labs[lab_id]["updated_at"] = utc_now()
                             break
                     except json.JSONDecodeError:
                         pass
@@ -537,7 +587,7 @@ async def run_pipeline(
                 # Wait for user's response
                 labs[lab_id]["status"] = "awaiting_user_input"
                 labs[lab_id]["conversation"]["awaiting_user_input"] = True
-                labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+                labs[lab_id]["updated_at"] = utc_now()
 
                 # Wait for user to send message via /message endpoint
                 wait_start = time.time()
@@ -553,12 +603,12 @@ async def run_pipeline(
                 labs[lab_id]["conversation"]["messages"].append({
                     "role": "user",
                     "content": user_answer,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": utc_now()
                 })
 
                 labs[lab_id]["status"] = "planner_running"
                 labs[lab_id]["conversation"]["awaiting_user_input"] = False
-                labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+                labs[lab_id]["updated_at"] = utc_now()
 
                 # Create message for next turn
                 message = types.Content(
@@ -579,7 +629,7 @@ async def run_pipeline(
         # Designer
         labs[lab_id]["status"] = "designer_running"
         labs[lab_id]["current_agent"] = "designer"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
         await asyncio.sleep(0.5)  # Allow frontend to poll and see status
 
         designer_runner = Runner(
@@ -612,13 +662,13 @@ async def run_pipeline(
         labs[lab_id]["progress"]["design_output"] = parsed_design_output
 
         labs[lab_id]["status"] = "designer_complete"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
         await asyncio.sleep(0.5)  # Allow frontend to poll and see status
 
         # Author
         labs[lab_id]["status"] = "author_running"
         labs[lab_id]["current_agent"] = "author"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
         await asyncio.sleep(0.5)  # Allow frontend to poll and see status
 
         author_runner = Runner(
@@ -659,14 +709,14 @@ async def run_pipeline(
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
 
         labs[lab_id]["status"] = "author_complete"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
         await asyncio.sleep(0.5)  # Allow frontend to poll and see status
 
         # Validator (if not dry_run)
         if not dry_run:
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
-            labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+            labs[lab_id]["updated_at"] = utc_now()
             await asyncio.sleep(0.5)  # Allow frontend to poll and see status
 
             validator_runner = Runner(
@@ -699,24 +749,24 @@ async def run_pipeline(
                 labs[lab_id]["progress"]["validation_result"] = None
 
             labs[lab_id]["status"] = "validator_complete"
-            labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+            labs[lab_id]["updated_at"] = utc_now()
 
         # Final status
         labs[lab_id]["status"] = "completed"
         labs[lab_id]["current_agent"] = None
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
     except asyncio.TimeoutError:
         labs[lab_id]["status"] = "failed"
         labs[lab_id]["error"] = "Pipeline execution timed out"
         labs[lab_id]["current_agent"] = None
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
     except Exception as e:
         labs[lab_id]["status"] = "failed"
         labs[lab_id]["error"] = str(e)
         labs[lab_id]["current_agent"] = None
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
 
 async def run_generation_pipeline(lab_id: str, dry_run: bool):
@@ -764,7 +814,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
             # Also store for frontend polling
             labs[lab_id]["latest_planner_update"] = {
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": utc_now(),
                 "message": message
             }
 
@@ -784,7 +834,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         # Update status
         labs[lab_id]["status"] = "designer_running"
         labs[lab_id]["current_agent"] = "designer"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         await send_progress_update("I'm now designing your network topology and initial configurations...")
 
@@ -803,7 +853,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         # Pipeline complete! Update status based on where we are
         labs[lab_id]["status"] = "author_running"
         labs[lab_id]["current_agent"] = "author"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         await send_progress_update("Network design complete! Now writing your lab guide...")
 
@@ -822,7 +872,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
             labs[lab_id]["progress"]["draft_lab_guide"] = session.state["draft_lab_guide"]
 
         labs[lab_id]["status"] = "author_complete"
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
 
@@ -830,7 +880,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         if not dry_run:
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
-            labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+            labs[lab_id]["updated_at"] = utc_now()
 
             # Get validation result from validator_agent instance
             from adk_agents.validator import validator_agent
@@ -849,7 +899,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         # Final status
         labs[lab_id]["status"] = "completed"
         labs[lab_id]["current_agent"] = None
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         if dry_run:
             await send_progress_update("Your lab is ready! (Validation skipped in dry-run mode)")
@@ -858,7 +908,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         labs[lab_id]["status"] = "failed"
         labs[lab_id]["error"] = str(e)
         labs[lab_id]["current_agent"] = None
-        labs[lab_id]["updated_at"] = datetime.utcnow().isoformat()
+        labs[lab_id]["updated_at"] = utc_now()
 
         # Send failure message to Planner conversation
         try:
