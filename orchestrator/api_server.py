@@ -715,7 +715,6 @@ async def run_pipeline(
         )
 
         # Pass exercise_spec in the message since ADK agents can't read from session state
-        import json
         designer_message = types.Content(
             parts=[types.Part(text=f"Here is the exercise_spec:\n\n{json.dumps(exercise_spec, indent=2)}")],
             role="user"
@@ -947,7 +946,6 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
         )
 
         # Pass exercise_spec in the message since ADK agents can't read from session state
-        import json
         designer_message = types.Content(
             parts=[types.Part(text=f"Here is the exercise_spec:\n\n{json.dumps(exercise_spec, indent=2)}")],
             role="user"
