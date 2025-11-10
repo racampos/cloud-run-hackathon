@@ -1037,6 +1037,7 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
             labs[lab_id]["updated_at"] = utc_now()
+            await asyncio.sleep(2.0)  # Allow frontend to poll and see status
 
             # Run validator
             validator_runner = Runner(
