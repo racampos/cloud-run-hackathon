@@ -146,6 +146,7 @@ async def create_lab(request: CreateLabRequest, background_tasks: BackgroundTask
         "updated_at": utc_now(),
         "prompt": request.prompt,
         "pending_messages": deque(),
+        "progress_messages": [],  # List of {"timestamp": ..., "message": ...} for canned updates
         "error": None
     }
 
@@ -258,8 +259,25 @@ async def get_lab_status(lab_id: str):
         import traceback
         traceback.print_exc()
 
+    # Merge progress messages from local storage into conversation
+    # These are canned messages sent during generation and are immediately visible
+    print(f"[DEBUG] Lab {lab_id} progress_messages: {lab.get('progress_messages', [])}")
+    if "progress_messages" in lab and lab["progress_messages"]:
+        print(f"[DEBUG] Adding {len(lab['progress_messages'])} progress messages to conversation")
+        for progress_msg in lab["progress_messages"]:
+            conversation_messages.append({
+                "role": "assistant",
+                "content": progress_msg["message"],
+                "timestamp": progress_msg["timestamp"]
+            })
+
+        # Sort all messages by timestamp to maintain chronological order
+        conversation_messages.sort(key=lambda msg: msg["timestamp"])
+    else:
+        print(f"[DEBUG] No progress_messages to add")
+
     # Build response
-    response = {k: v for k, v in lab.items() if k != "pending_messages"}
+    response = {k: v for k, v in lab.items() if k not in ["pending_messages", "progress_messages"]}
 
     # Replace conversation with ADK-based messages if available, otherwise use existing
     if conversation_messages:
@@ -621,12 +639,30 @@ async def run_pipeline(
 
         # ========== PHASE 2: AUTOMATED PIPELINE ==========
 
+        # Helper to send progress updates
+        def send_progress_update(message: str):
+            """Send a canned progress message to the conversation."""
+            timestamp = utc_now()
+            print(f"[DEBUG] send_progress_update (run_pipeline) for lab {lab_id}: {message}")
+            labs[lab_id]["progress_messages"].append({
+                "timestamp": timestamp,
+                "message": message
+            })
+            labs[lab_id]["latest_planner_update"] = {
+                "timestamp": timestamp,
+                "message": message
+            }
+
+        # Send initial generation message
+        send_progress_update("Perfect! I have everything I need. Let me start creating your lab...")
+
         # Import remaining agents
         from adk_agents.designer import designer_agent
         from adk_agents.author import author_agent
         from adk_agents.validator import validator_agent
 
         # Designer
+        send_progress_update("I'm now designing your network topology and initial configurations...")
         labs[lab_id]["status"] = "designer_running"
         labs[lab_id]["current_agent"] = "designer"
         labs[lab_id]["updated_at"] = utc_now()
@@ -666,6 +702,7 @@ async def run_pipeline(
         await asyncio.sleep(2.0)  # Allow frontend to poll and see status and see status
 
         # Author
+        send_progress_update("Network design complete! Now writing your lab guide...")
         labs[lab_id]["status"] = "author_running"
         labs[lab_id]["current_agent"] = "author"
         labs[lab_id]["updated_at"] = utc_now()
@@ -714,6 +751,7 @@ async def run_pipeline(
 
         # Validator (if not dry_run)
         if not dry_run:
+            send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
             labs[lab_id]["status"] = "validator_running"
             labs[lab_id]["current_agent"] = "validator"
             labs[lab_id]["updated_at"] = utc_now()
@@ -751,6 +789,15 @@ async def run_pipeline(
             labs[lab_id]["status"] = "validator_complete"
             labs[lab_id]["updated_at"] = utc_now()
 
+            # Send final message based on validation result
+            if validation_result and validation_result.get("success"):
+                send_progress_update("Excellent! Your lab passed validation and is ready to use 🎉")
+            else:
+                send_progress_update("Validation found some issues. Your lab is complete but may need manual review.")
+        else:
+            # Dry-run mode: no validation
+            send_progress_update("Your lab is ready! (Validation skipped in dry-run mode)")
+
         # Final status
         labs[lab_id]["status"] = "completed"
         labs[lab_id]["current_agent"] = None
@@ -784,37 +831,27 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
     try:
         from adk_agents.pipeline import create_generation_pipeline
         from google.adk import Runner
-        from google.adk.events import Event
-        from google.genai.types import Content, Part
 
         global _session_service
 
         # Helper to inject canned message into Planner's conversation
         async def send_progress_update(message: str):
             """Inject a canned progress message as if Planner said it."""
-            session = await _session_service.get_session(
-                app_name="adk_agents",
-                user_id="api",
-                session_id=lab_id
-            )
+            timestamp = utc_now()
 
-            # Create assistant message from Planner
-            canned_content = Content(
-                parts=[Part(text=message)],
-                role="model"  # "model" = assistant role
-            )
+            print(f"[DEBUG] send_progress_update called for lab {lab_id}: {message}")
 
-            canned_event = Event(
-                content=canned_content,
-                author="PedagogyPlanner"  # Match Planner's agent name
-            )
+            # Store in local progress_messages list (immediately visible to /status endpoint)
+            labs[lab_id]["progress_messages"].append({
+                "timestamp": timestamp,
+                "message": message
+            })
 
-            # Inject into conversation history
-            await _session_service.append_event(session, canned_event)
+            print(f"[DEBUG] progress_messages now has {len(labs[lab_id]['progress_messages'])} items")
 
-            # Also store for frontend polling
+            # Also update latest_planner_update for compatibility
             labs[lab_id]["latest_planner_update"] = {
-                "timestamp": utc_now(),
+                "timestamp": timestamp,
                 "message": message
             }
 
