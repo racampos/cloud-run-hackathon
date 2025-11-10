@@ -437,10 +437,20 @@ async def list_labs():
     for lab_id, lab in labs.items():
         # Get title from exercise_spec if available
         title = "Untitled Lab"
-        if lab.get("progress", {}).get("exercise_spec"):
-            title = lab["progress"]["exercise_spec"].get("title", title)
-        else:
-            # Fallback: truncate prompt
+        exercise_spec = lab.get("progress", {}).get("exercise_spec")
+        if exercise_spec:
+            # Handle both dict and JSON string formats
+            if isinstance(exercise_spec, str):
+                try:
+                    exercise_spec = json.loads(exercise_spec)
+                except (json.JSONDecodeError, TypeError):
+                    exercise_spec = None
+
+            if isinstance(exercise_spec, dict):
+                title = exercise_spec.get("title", title)
+
+        # Fallback: truncate prompt if no title found
+        if title == "Untitled Lab" and lab.get("prompt"):
             title = lab["prompt"][:50] + ("..." if len(lab["prompt"]) > 50 else "")
 
         result.append({
