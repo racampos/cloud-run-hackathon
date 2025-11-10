@@ -207,7 +207,7 @@ async def get_lab_status(lab_id: str):
                 # Convert ADK session.events to conversation messages
                 # Note: We generate timestamps based on event order and current time
                 # to ensure consistent UTC timestamps across all messages
-                base_time = datetime.fromisoformat(lab["created_at"].replace('Z', '+00:00'))
+                base_time = datetime.fromisoformat(lab["created_at"].replace('Z', ''))
                 time_offset_seconds = 0
 
                 for idx, event in enumerate(session.events):
