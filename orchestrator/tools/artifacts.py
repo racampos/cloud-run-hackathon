@@ -62,9 +62,14 @@ async def fetch_validation_artifacts(
     Returns:
         ValidationArtifacts with parsed summary, logs, and device outputs
 
-    Expected GCS structure:
+    Expected GCS structure (current format):
+        {bucket}/{execution_id}/results.json - validation results summary
+        {bucket}/{execution_id}/transcript.json - full command/response transcript
+        {bucket}/{execution_id}/execution.log - (optional) execution logs
+        {bucket}/{execution_id}/spec.json - the input specification
+
+    Legacy format (fallback):
         {bucket}/{execution_id}/summary.json
-        {bucket}/{execution_id}/execution.log
         {bucket}/{execution_id}/devices/{hostname}_output.txt
         {bucket}/{execution_id}/devices/{hostname}_final_config.txt
     """
@@ -91,16 +96,45 @@ async def fetch_validation_artifacts(
         logs = log_blob.download_as_text()
         logger.info("logs_loaded", log_size=len(logs))
 
-    # Fetch device outputs (optional)
+    # Fetch transcript.json (new format from headless-runner)
     device_outputs = {}
-    devices_prefix = f"{execution_id}/devices/"
+    transcript_blob = bucket.blob(f"{execution_id}/transcript.json")
+    if transcript_blob.exists():
+        transcript_json = transcript_blob.download_as_text()
+        transcript = json.loads(transcript_json)
 
-    blobs = storage_client.list_blobs(bucket_name, prefix=devices_prefix)
-    for blob in blobs:
-        # Extract filename from path: {execution_id}/devices/{hostname}_output.txt
-        filename = blob.name.split("/")[-1]
-        if filename.endswith("_output.txt") or filename.endswith("_final_config.txt"):
-            device_outputs[filename] = blob.download_as_text()
+        # Group transcript entries by device and format as readable text
+        device_transcripts = {}
+        for entry in transcript:
+            device = entry.get("step", {}).get("device", "unknown")
+            command = entry.get("step", {}).get("text", "")
+            response_content = entry.get("resp", {}).get("content", "")
+            prompt = entry.get("resp", {}).get("prompt", "")
+
+            if device not in device_transcripts:
+                device_transcripts[device] = []
+
+            # Format as readable command-response pair
+            device_transcripts[device].append(f"{prompt}{command}")
+            if response_content:
+                device_transcripts[device].append(response_content)
+
+        # Convert to text format for each device
+        for device, lines in device_transcripts.items():
+            device_outputs[f"{device}_transcript.txt"] = "\n".join(lines)
+
+        logger.info("transcript_loaded", num_devices=len(device_transcripts), num_entries=len(transcript))
+    else:
+        # Fallback: try old format with devices/ subdirectory
+        devices_prefix = f"{execution_id}/devices/"
+        blobs = storage_client.list_blobs(bucket_name, prefix=devices_prefix)
+        for blob in blobs:
+            # Extract filename from path: {execution_id}/devices/{hostname}_output.txt
+            filename = blob.name.split("/")[-1]
+            if filename.endswith("_output.txt") or filename.endswith("_final_config.txt"):
+                device_outputs[filename] = blob.download_as_text()
+
+        logger.info("devices_fallback", device_files=len(device_outputs))
 
     logger.info(
         "artifacts_fetch_complete",
