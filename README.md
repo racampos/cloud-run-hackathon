@@ -1,4 +1,6 @@
-# NetGenius - AI-Powered Networking Lab Generator
+# NetGenius Instructor Copilot (NIC)
+
+**AI-Powered Networking Lab Generator**
 
 **Status:** M1 Development (Foundation)
 **Platform:** Google Cloud (Cloud Run + Cloud Run Jobs)
@@ -7,34 +9,39 @@
 
 ## Overview
 
-NetGenius automates the full lifecycle of networking lab creation for instructors:
-- 📋 Planning learning objectives
-- 🏗️ Designing network topology and configurations
-- ✍️ Authoring student-facing lab guides
-- ✅ Validating labs via headless simulation
-- 📦 Publishing final, solvable lab materials
+NetGenius Instructor Copilot (NIC) automates the full lifecycle of networking lab creation for instructors:
+
+- Planning learning objectives
+- Designing network topology and configurations
+- Authoring student-facing lab guides
+- Validating labs via headless simulation
+- Publishing final, solvable lab materials
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│           Orchestrator (This Repo - Public)         │
-│                    Google ADK                        │
-│  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌────────┐│
-│  │ Planner  │→ │ Designer │→ │ Author │→ │Validator││
-│  └──────────┘  └──────────┘  └────────┘  └────────┘│
-└────────┬────────────────────────────────────┬───────┘
-         │                                    │
-    ┌────┴────────┐                      ┌────┴──────────┐
-    │  Parser-    │                      │   Headless    │
-    │  Linter     │                      │   Runner      │
-    │  (Private)  │                      │   (Private)   │
-    │  Cloud Run  │                      │  Cloud Run Job│
-    └─────────────┘                      └────────┬──────┘
-                                                  │
-                                         ┌────────┴──────┐
-                                         │  GCS Artifacts│
-                                         └───────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Frontend (Next.js)                      │
+│              Interactive Lab Creation Interface              │
+└────────────────────────┬─────────────────────────────────────┘
+                         │
+┌────────────────────────┴─────────────────────────────────────┐
+│              Orchestrator (FastAPI + Google ADK)             │
+│                                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐     │
+│  │ Planner  │→ │ Designer │→ │  Author  │→ │ Validator │     │
+│  └──────────┘  └──────────┘  └──────────┘  └─────┬─────┘     │
+└──────────────────────────────────────────────────┼───────────┘
+                                                   │
+                                          ┌────────┴───────────┐
+                                          │  Headless Runner   │
+                                          │  (Private)         │
+                                          │  Cloud Run Job     │
+                                          └──────────┬─────────┘
+                                                     │
+                                          ┌──────────┴─────────┐
+                                          │    GCS Artifacts   │
+                                          └────────────────────┘
 ```
 
 ## Repository Structure
@@ -42,18 +49,20 @@ NetGenius automates the full lifecycle of networking lab creation for instructor
 This repository contains **only the open-source orchestrator**. The validation and simulation services are maintained in separate private repositories.
 
 ### This Repository (Public)
+
 ```
 cloud-run-hackathon/
 ├── orchestrator/          # ADK-based multi-agent orchestrator
-│   ├── agents/           # Planner, Designer, Author, Validator, RCA, Publisher
+│   ├── adk_agents/       # Planner, Designer, Author, Validator agents
 │   ├── tools/            # Tool wrappers for private services
 │   └── schemas/          # Data models for agent communication
-├── docs/                 # API documentation for all services
-│   ├── parser-linter-api.md     # Parser-Linter API contract
+├── frontend/             # Next.js web interface
+│   ├── components/       # React components for lab creation UI
+│   └── app/             # Next.js app router pages
+├── docs/                 # API documentation
 │   └── headless-runner-api.md   # Headless Runner API contract
 ├── infra/                # GCP infrastructure and deployment
-│   ├── scripts/          # Setup and deployment scripts
-│   └── terraform/        # Infrastructure as Code (coming soon)
+│   └── scripts/          # Setup and deployment scripts
 ├── examples/             # Sample labs and payloads
 │   └── static-routing/   # Example static routing lab
 └── README.md             # This file
@@ -61,13 +70,8 @@ cloud-run-hackathon/
 
 ### Private Repositories (Not Included)
 
-**netgenius-parser-linter** (Private)
-- Fast CLI and topology validation service
-- Stateful/stateless command parsing
-- Cisco IOS syntax validation
-- Deployed as Cloud Run Service
-
 **netgenius-headless-runner** (Private)
+
 - Network simulation execution engine
 - Proprietary simulator integration
 - GCS artifact generation
@@ -75,66 +79,59 @@ cloud-run-hackathon/
 
 ## Components
 
-| Component | Description | Visibility | Deployment |
-|-----------|-------------|------------|------------|
-| **Orchestrator** | Multi-agent coordination via Google ADK | Public (this repo) | Local/Container |
-| **Parser-Linter** | Fast CLI/topology validation service | Private | Cloud Run Service |
-| **Headless Runner** | Simulation execution in Cloud Run Jobs | Private | Cloud Run Job |
+| Component           | Description                             | Visibility         | Deployment        |
+| ------------------- | --------------------------------------- | ------------------ | ----------------- |
+| **Frontend**        | Next.js web interface for lab creation  | Public (this repo) | Vercel            |
+| **Orchestrator**    | Multi-agent coordination via Google ADK | Public (this repo) | Cloud Run Service |
+| **Headless Runner** | Simulation execution in Cloud Run Jobs  | Private            | Cloud Run Job     |
 
 ## API Documentation
 
-Even though the Parser-Linter and Headless Runner source code is private, their API contracts are fully documented:
+The Headless Runner source code is private, but its API contract is fully documented:
 
-- [Parser-Linter API Reference](docs/parser-linter-api.md) - Complete API specification
 - [Headless Runner API Reference](docs/headless-runner-api.md) - Job payload and artifact formats
 
-The orchestrator integrates with these services via well-defined REST/RPC interfaces.
+The orchestrator integrates with the Headless Runner via a well-defined job execution interface.
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.11+
+- Node.js 18+
 - Google Cloud SDK
-- Access to deployed Parser-Linter and Headless Runner services
+- Access to deployed Headless Runner service
 
-### Local Development
+### Running Locally
 
-1. **Set up virtual environment:**
+1. **Start the orchestrator:**
+
 ```bash
 cd orchestrator
 python -m venv venv
 source venv/bin/activate  # or `venv\Scripts\activate` on Windows
 pip install -r requirements.txt
+python api_server.py
 ```
 
-2. **Configure environment:**
+2. **Start the frontend:**
+
 ```bash
-export GCP_PROJECT_ID="your-project-id"
-export PARSER_LINTER_URL="https://parser-linter-xxx-uc.a.run.app"
-export REGION="us-central1"
+cd frontend
+npm install
+npm run dev
 ```
 
-3. **Test orchestrator:**
-```bash
-python main.py test-integration
-python main.py create --prompt "Create a CCNA static routing lab"
-```
+3. **Access the application:**
 
-### Deploying Private Services
+Open http://localhost:3000 in your browser.
 
-The Parser-Linter and Headless Runner services must be built and deployed from their private repositories before running the orchestrator.
+### Deploying to Production
 
-1. **Deploy Parser-Linter:**
-```bash
-# In netgenius-parser-linter repository (private)
-gcloud builds submit --tag=us-central1-docker.pkg.dev/PROJECT/netgenius/parser-linter
+The Headless Runner service must be built and deployed from its private repository before running the orchestrator.
 
-# Then in this repository
-./infra/scripts/deploy-parser-linter.sh
-```
+1. **Deploy Headless Runner:**
 
-2. **Deploy Headless Runner:**
 ```bash
 # In netgenius-headless-runner repository (private)
 gcloud builds submit --tag=us-central1-docker.pkg.dev/PROJECT/netgenius/headless-runner
@@ -149,75 +146,42 @@ gcloud builds submit --tag=us-central1-docker.pkg.dev/PROJECT/netgenius/headless
 # Set up GCP project, service accounts, GCS, Artifact Registry
 ./infra/scripts/setup-gcp.sh
 
-# Deploy services (after building private images)
-./infra/scripts/deploy-parser-linter.sh
+# Deploy Headless Runner (after building private image)
 ./infra/scripts/deploy-headless-runner.sh
 ```
 
 ## Testing
 
-### Unit Tests (Orchestrator Only)
-```bash
-cd orchestrator
-pytest tests/
-```
+The application can be tested through the web interface at http://localhost:3000. Simply:
 
-### Integration Tests
-```bash
-# Requires deployed Parser-Linter and Headless Runner
-cd orchestrator
-python main.py test-integration
-```
-
-### Example Lab Execution
-```bash
-# Run a static routing lab example
-cd orchestrator
-python main.py create \
-  --prompt "Create a basic static routing lab with 2 routers" \
-  --verbose
-```
-
-## Development Milestones
-
-- [x] **M1 (Days 1-2):** Foundation - Infrastructure, orchestrator skeleton ← Current
-- [ ] **M2 (Days 3-4):** Core agents + linting integration
-- [ ] **M3 (Day 5):** Headless validation end-to-end
-- [ ] **M4 (Day 6):** RCA + Publisher + polish
-- [ ] **M5 (Day 7):** Demo preparation
+1. Enter a lab description (e.g., "Create a basic static routing lab")
+2. Answer any clarifying questions from the Planner
+3. Watch the agents work through the workflow:
+   - Planner: Gathers requirements
+   - Designer: Creates topology and configurations
+   - Author: Writes the lab guide
+   - Validator: Runs headless simulation
 
 ## Documentation
 
 - [PRD.md](PRD.md) - Product Requirements Document
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) - Detailed implementation guide
-- [docs/parser-linter-api.md](docs/parser-linter-api.md) - Parser-Linter API
 - [docs/headless-runner-api.md](docs/headless-runner-api.md) - Headless Runner API
 
 ## How It Works
 
-### 1. Orchestrator (Public)
+### Multi-Agent Workflow
 
-The orchestrator coordinates a multi-agent workflow:
+The orchestrator coordinates a multi-agent workflow using Google ADK:
 
-1. **Pedagogy Planner** - Extracts learning objectives from instructor prompt
+1. **Pedagogy Planner** - Engages in Q&A to gather complete lab requirements
 2. **Designer** - Creates network topology and initial/target configurations
-3. **Lab Guide Author** - Writes step-by-step student instructions
+3. **Lab Guide Author** - Writes step-by-step student instructions with markdown
 4. **Validator** - Executes headless simulation to verify lab is solvable
-5. **RCA Agent** - Analyzes failures and routes fixes
-6. **Publisher** - Generates final lab guide and artifacts
 
-### 2. Parser-Linter (Private Service)
+### Headless Runner (Private Service)
 
-Fast validation service that catches errors before expensive simulation:
-
-- **POST /lint/topology** - Validates YAML topology structure
-- **POST /lint/cli** - Validates CLI commands (stateful/stateless)
-
-See [API Documentation](docs/parser-linter-api.md) for details.
-
-### 3. Headless Runner (Private Job)
-
-Executes complete lab simulation in isolated environment:
+Executes complete lab simulation in isolated Cloud Run Job:
 
 - Applies initial configurations
 - Runs student steps
@@ -229,47 +193,45 @@ See [API Documentation](docs/headless-runner-api.md) for details.
 
 ## Example Workflow
 
-```python
-# 1. Instructor provides prompt
-"Create a CCNA-level OSPF lab with 2 routers and basic adjacency"
+```
+1. Instructor enters prompt: "Create a password configuration lab"
 
-# 2. Planner extracts objectives
-ExerciseSpec(
-    title="OSPF Basic Adjacency",
-    objectives=["Enable OSPF", "Establish adjacency", "Verify routes"],
-    level="CCNA"
-)
+2. Planner asks clarifying questions:
+   - Which password types? (enable, console, VTY)
+   - How many routers?
+   - Target difficulty and time?
 
-# 3. Designer creates topology + configs
-# Calls: POST /lint/topology, POST /lint/cli
+3. Designer creates:
+   - Topology YAML with router(s)
+   - Initial configs (base setup)
+   - Target configs (with passwords configured)
 
-# 4. Author writes lab guide
-# Calls: POST /lint/cli (per device section)
+4. Author writes lab guide:
+   - Introduction and objectives
+   - Step-by-step instructions
+   - Verification commands
 
-# 5. Validator runs simulation
-# Calls: Cloud Run Job API with payload
+5. Validator runs simulation:
+   - Triggers Cloud Run Job
+   - Applies configs and tests student steps
+   - Returns success/failure with detailed logs
 
-# 6. Job writes artifacts to GCS
-# Orchestrator reads summary.json
-
-# 7. Publisher generates final lab guide
 ```
 
 ## License
 
-**Orchestrator:** MIT License (open-source)
-**Parser-Linter & Headless Runner:** Proprietary (closed-source)
+**Frontend & Orchestrator:** MIT License (open-source)
+**Headless Runner:** Proprietary (closed-source)
 
 ## Hackathon Details
 
 **Event:** Google Cloud Run Hackathon
-**Owner:** Rafael Campos
+**Team:** Rafael Campos
 **Category:** AI-Powered Automation
+**Stack:** Google ADK (Gemini 2.5 Flash) + FastAPI + Next.js + Cloud Run + Cloud Run Jobs
 
-This public repository demonstrates the orchestration layer and architecture while keeping proprietary validation and simulation logic private.
+NetGenius Instructor Copilot demonstrates how Google Cloud Run and Cloud Run Jobs enable scalable, event-driven AI agent orchestration with seamless integration between web frontend, multi-agent backend, and batch simulation workloads.
 
 ---
-
-**Current Status:** M1 - Foundation phase complete ✅
 
 For questions or issues, please open a GitHub issue in this repository.

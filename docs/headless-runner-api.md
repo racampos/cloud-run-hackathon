@@ -562,21 +562,19 @@ payload = {
 
 ## Best Practices
 
-1. **Always validate with Parser-Linter first:** Catch syntax errors before expensive simulation runs.
+1. **Use descriptive exercise_ids:** Include lab type and version (e.g., `ospf-basic-v2-001`).
 
-2. **Use descriptive exercise_ids:** Include lab type and version (e.g., `ospf-basic-v2-001`).
+2. **Keep initial configs minimal:** Only configure what's essential for the lab objective.
 
-3. **Keep initial configs minimal:** Only configure what's essential for the lab objective.
+3. **Add verification steps:** Interleave `verify` steps to catch issues early.
 
-4. **Add verification steps:** Interleave `verify` steps to catch issues early.
+4. **Set appropriate timeouts:** Complex labs may need > 1 hour for full execution.
 
-5. **Set appropriate timeouts:** Complex labs may need > 1 hour for full execution.
+5. **Monitor GCS costs:** Old artifacts are auto-deleted after 30 days (lifecycle policy).
 
-6. **Monitor GCS costs:** Old artifacts are auto-deleted after 30 days (lifecycle policy).
+6. **Handle failures gracefully:** Parse `summary.json` to determine if errors are blocking.
 
-7. **Handle failures gracefully:** Parse `summary.json` to determine if errors are blocking.
-
-8. **Use continue_on_error cautiously:** Only for non-critical verification steps.
+7. **Use continue_on_error cautiously:** Only for non-critical verification steps.
 
 ---
 
