@@ -1,16 +1,18 @@
 # NetGenius Instructor Copilot (NIC)
 
-**AI-Powered Networking Lab Generator**
+**AI-Powered Networking Lab Generator Built with Google's Agent Development Kit (ADK)**
 
 ## Overview
 
-NetGenius Instructor Copilot (NIC) automates the full lifecycle of networking lab creation for networking instructors:
+NetGenius Instructor Copilot (NIC) leverages **Google's Agent Development Kit (ADK)** to orchestrate multiple specialized AI agents that automate the full lifecycle of networking lab creation:
 
-- Planning learning objectives
-- Designing network topology and configurations
-- Authoring student-facing lab guides
-- Validating labs via headless simulation
-- Publishing final, solvable lab materials
+- **Planning** learning objectives through interactive multi-turn Q&A (ADK LlmAgent)
+- **Designing** network topology and configurations with tool integration (ADK LlmAgent with tools)
+- **Authoring** student-facing lab guides with markdown formatting (ADK LlmAgent)
+- **Validating** labs via headless simulation (ADK Custom Agent)
+- **Publishing** final, solvable lab materials
+
+Built using Google ADK's multi-agent orchestration patterns powered by Gemini 2.5 Flash as the underlying LLM.
 
 ## Architecture
 
@@ -113,13 +115,15 @@ GOOGLE_API_KEY=your_google_api_key_here
 ```
 
 **Required environment variables:**
+
 - `GOOGLE_API_KEY` - Your Google Gemini API key (required for all AI agents)
 
 **Optional environment variables** (only needed for Cloud Run Job validation):
+
 - `GCP_PROJECT_ID` - Your GCP project ID (default: `netgenius-hackathon`)
 - `REGION` - GCP region (default: `us-central1`)
 - `GCS_BUCKET` - GCS bucket for artifacts (default: `netgenius-artifacts-dev`)
-- `PORT` - Server port (default: `8081`)
+- `PORT` - Server port (default: `8080`)
 
 2. **Start the orchestrator:**
 
@@ -131,7 +135,7 @@ pip install -r requirements.txt
 python api_server.py
 ```
 
-The orchestrator will start on http://localhost:8081
+The orchestrator will start on http://localhost:8080
 
 3. **Start the frontend:**
 
@@ -175,15 +179,15 @@ gcloud builds submit --tag=us-central1-docker.pkg.dev/PROJECT/netgenius/headless
 
 ## Testing
 
-The application can be tested through the web interface at http://localhost:3000. Simply:
+The application can be tested through the web interface at http://localhost:3000. You'll see ADK's multi-agent orchestration in action:
 
 1. Enter a lab description (e.g., "Create a basic static routing lab")
-2. Answer any clarifying questions from the Planner
-3. Watch the agents work through the workflow:
-   - Planner: Gathers requirements
-   - Designer: Creates topology and configurations
-   - Author: Writes the lab guide
-   - Validator: Runs headless simulation
+2. Interact with the Planner agent's multi-turn conversation
+3. Watch ADK coordinate the agent pipeline:
+   - Planner: Gathers requirements via conversational Q&A
+   - Designer: Creates topology and configurations with tool validation
+   - Author: Writes the lab guide using structured output
+   - Validator: Runs headless simulation through custom integration
 
 ## Documentation
 
@@ -193,14 +197,16 @@ The application can be tested through the web interface at http://localhost:3000
 
 ## How It Works
 
-### Multi-Agent Workflow
+### Google ADK Multi-Agent Workflow
 
-The orchestrator coordinates a multi-agent workflow using Google ADK:
+The orchestrator leverages **Google ADK's agent orchestration capabilities** to coordinate specialized AI agents in a sequential pipeline:
 
-1. **Pedagogy Planner** - Engages in Q&A to gather complete lab requirements
-2. **Designer** - Creates network topology and initial/target configurations
-3. **Lab Guide Author** - Writes step-by-step student instructions with markdown
-4. **Validator** - Executes headless simulation to verify lab is solvable
+1. **Pedagogy Planner** (`LlmAgent`) - Engages in multi-turn Q&A conversations to gather complete lab requirements using ADK's session management
+2. **Designer** (`LlmAgent` with tools) - Creates network topology and configurations, utilizing ADK's tool integration patterns to validate outputs
+3. **Lab Guide Author** (`LlmAgent`) - Writes step-by-step student instructions with markdown, leveraging ADK's structured output capabilities
+4. **Validator** (Custom `BaseAgent`) - Executes headless simulation to verify lab is solvable, demonstrating ADK's extensibility for custom integrations
+
+Each agent communicates through ADK's **session state**, enabling seamless data flow between agents without manual state management. The entire pipeline is orchestrated using ADK's `SequentialAgent` pattern, providing automatic error handling and retry logic.
 
 ### Headless Runner (Private Service)
 
@@ -219,22 +225,22 @@ See [API Documentation](docs/headless-runner-api.md) for details.
 ```
 1. Instructor enters prompt: "Create a password configuration lab"
 
-2. Planner asks clarifying questions:
+2. Planner (ADK LlmAgent) asks clarifying questions via multi-turn session:
    - Which password types? (enable, console, VTY)
    - How many routers?
    - Target difficulty and time?
 
-3. Designer creates:
+3. Designer (ADK LlmAgent with tools) creates validated outputs:
    - Topology YAML with router(s)
    - Initial configs (base setup)
    - Target configs (with passwords configured)
 
-4. Author writes lab guide:
+4. Author (ADK LlmAgent) writes structured markdown:
    - Introduction and objectives
    - Step-by-step instructions
    - Verification commands
 
-5. Validator runs simulation:
+5. Validator (Custom ADK Agent) runs simulation via external service:
    - Triggers Cloud Run Job
    - Applies configs and tests student steps
    - Returns success/failure with detailed logs
@@ -253,7 +259,7 @@ See [API Documentation](docs/headless-runner-api.md) for details.
 **Category:** AI-Powered Automation
 **Stack:** Google ADK (Gemini 2.5 Flash) + FastAPI + Next.js + Cloud Run + Cloud Run Jobs
 
-NetGenius Instructor Copilot demonstrates how Google Cloud Run and Cloud Run Jobs enable scalable, event-driven AI agent orchestration with seamless integration between web frontend, multi-agent backend, and batch simulation workloads.
+NetGenius Instructor Copilot demonstrates how **Google's Agent Development Kit (ADK)** combined with Cloud Run enables scalable, event-driven AI agent orchestration. The application showcases ADK's multi-agent coordination patterns (LlmAgent, custom agents, session management) running seamlessly on Cloud Run Services, with validation workloads executing as Cloud Run Jobs.
 
 ---
 
