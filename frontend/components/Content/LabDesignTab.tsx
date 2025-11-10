@@ -11,7 +11,7 @@ interface LabDesignTabProps {
 }
 
 export function LabDesignTab({ designOutput }: LabDesignTabProps) {
-  const devices = Object.keys(designOutput.platforms);
+  const devices = designOutput.platforms ? Object.keys(designOutput.platforms) : [];
 
   return (
     <div className="space-y-6">

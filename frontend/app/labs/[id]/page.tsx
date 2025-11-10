@@ -25,7 +25,11 @@ export default function LabDetailPage({
   const chatWithPlanner = useChatWithPlanner();
 
   const [activeTab, setActiveTab] = useState<ContentTab>('design');
-  const [lastSeenUpdateTimestamp, setLastSeenUpdateTimestamp] = useState<string | null>(null);
+  const [progressMessages, setProgressMessages] = useState<Array<{
+    timestamp: string;
+    message: string;
+  }>>([]);
+  const [lastProcessedStatus, setLastProcessedStatus] = useState<string | null>(null);
 
   // Auto-switch tabs when content becomes available
   useEffect(() => {
@@ -41,26 +45,34 @@ export default function LabDetailPage({
     }
   }, [lab?.progress.design_output, lab?.progress.draft_lab_guide_markdown]);
 
-  // Handle latest_planner_update injection
+  // Track status changes and create progress messages
   useEffect(() => {
-    if (lab?.latest_planner_update) {
-      const updateTimestamp = lab.latest_planner_update.timestamp;
+    if (!lab || lab.status === lastProcessedStatus) return;
 
-      // Only inject if this is a new update
-      if (updateTimestamp !== lastSeenUpdateTimestamp) {
-        // Add the progress message to the conversation
-        const progressMessage = {
-          role: 'assistant' as const,
-          content: lab.latest_planner_update.message,
-          timestamp: updateTimestamp,
-        };
+    const statusMessages: Record<string, string> = {
+      'planner_complete': '✓ Requirements gathered',
+      'designer_running': '⏳ Designing network topology...',
+      'designer_complete': '✓ Network designed',
+      'author_running': '⏳ Writing lab guide...',
+      'author_complete': '✓ Lab guide written',
+      'validator_running': '⏳ Validating lab exercise...',
+      'validator_complete': '✓ Validation complete',
+      'completed': '✓ Lab generation completed successfully!',
+    };
 
-        // The message will be shown through the conversation
-        // We just need to track that we've seen it
-        setLastSeenUpdateTimestamp(updateTimestamp);
-      }
+    const message = statusMessages[lab.status];
+    if (message) {
+      setProgressMessages((prev) => [
+        ...prev,
+        {
+          timestamp: new Date().toISOString(),
+          message,
+        },
+      ]);
     }
-  }, [lab?.latest_planner_update, lastSeenUpdateTimestamp]);
+
+    setLastProcessedStatus(lab.status);
+  }, [lab?.status, lastProcessedStatus]);
 
   const handleSendMessage = (message: string) => {
     chatWithPlanner.mutate({ labId: resolvedParams.id, message });
@@ -233,6 +245,7 @@ export default function LabDetailPage({
             status={lab.status}
             onSendMessage={handleSendMessage}
             isLoading={chatWithPlanner.isPending}
+            progressUpdates={progressMessages}
           />
         </div>
       </main>

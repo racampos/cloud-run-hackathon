@@ -15,52 +15,10 @@ interface PlannerChatPanelProps {
   status: LabStatus;
   onSendMessage: (content: string) => void;
   isLoading?: boolean;
-}
-
-interface ProgressStage {
-  key: string;
-  label: string;
-  status: 'pending' | 'running' | 'complete';
-}
-
-function getProgressStages(status: LabStatus): ProgressStage[] {
-  const stages: ProgressStage[] = [
-    { key: 'planner', label: 'Requirements gathered', status: 'pending' },
-    { key: 'designer', label: 'Network designed', status: 'pending' },
-    { key: 'author', label: 'Lab guide written', status: 'pending' },
-    { key: 'validator', label: 'Validation complete', status: 'pending' },
-  ];
-
-  // Determine status for each stage
-  if (status === 'completed' || status === 'failed') {
-    return stages.map((s) => ({ ...s, status: 'complete' }));
-  }
-
-  if (status === 'planner_running') {
-    stages[0].status = 'running';
-  } else if (status === 'planner_complete' || status.includes('designer') || status.includes('author') || status.includes('validator')) {
-    stages[0].status = 'complete';
-  }
-
-  if (status === 'designer_running') {
-    stages[1].status = 'running';
-  } else if (status.includes('author') || status.includes('validator') || status === 'completed') {
-    stages[1].status = 'complete';
-  }
-
-  if (status === 'author_running') {
-    stages[2].status = 'running';
-  } else if (status === 'author_complete' || status.includes('validator') || status === 'completed') {
-    stages[2].status = 'complete';
-  }
-
-  if (status === 'validator_running') {
-    stages[3].status = 'running';
-  } else if (status === 'validator_complete' || status === 'completed') {
-    stages[3].status = 'complete';
-  }
-
-  return stages;
+  progressUpdates?: Array<{
+    timestamp: string;
+    message: string;
+  }>;
 }
 
 export function PlannerChatPanel({
@@ -69,15 +27,45 @@ export function PlannerChatPanel({
   status,
   onSendMessage,
   isLoading,
+  progressUpdates = [],
 }: PlannerChatPanelProps) {
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const progressStages = getProgressStages(status);
+
+  // Track which messages are progress updates by timestamp
+  const progressUpdateTimestamps = new Set<string>();
+  progressUpdates.forEach((update) => {
+    progressUpdateTimestamps.add(update.timestamp);
+  });
+
+  // Merge progress updates into message stream
+  const allMessages = [...conversation.messages];
+
+  // Add all progress updates that aren't already in the conversation
+  progressUpdates.forEach((update) => {
+    const isAlreadyInConversation = conversation.messages.some(
+      (msg) => msg.timestamp === update.timestamp
+    );
+
+    if (!isAlreadyInConversation) {
+      allMessages.push({
+        role: 'assistant' as const,
+        content: update.message,
+        timestamp: update.timestamp,
+      });
+    }
+  });
+
+  // Sort by timestamp to maintain chronological order
+  // Note: This may have issues with the initial message if backend sends inconsistent timezones
+  allMessages.sort((a, b) =>
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversation.messages, exerciseSpec]);
+  }, [conversation.messages, exerciseSpec, progressUpdates]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,8 +75,18 @@ export function PlannerChatPanel({
     }
   };
 
-  // Check if we should show the progress indicator
-  const showProgress = status !== 'pending' && status !== 'planner_running';
+  // Check if message is exercise spec JSON
+  const isExerciseSpecMessage = (content: string) => {
+    return content.includes('"title":') && content.includes('"objectives":');
+  };
+
+  // Check if message is a progress update
+  const isProgressMessage = (content: string) => {
+    return content.includes('✓') || content.includes('⏳') ||
+           content.toLowerCase().includes('designing') ||
+           content.toLowerCase().includes('writing') ||
+           content.toLowerCase().includes('validating');
+  };
 
   return (
     <div className="flex flex-col h-full bg-white border-l border-gray-200">
@@ -100,15 +98,94 @@ export function PlannerChatPanel({
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {conversation.messages
-          .filter((message) => {
-            // Filter out raw JSON exercise_spec messages since we show them formatted below
-            if (message.role === 'assistant' && message.content.includes('"title":') && message.content.includes('"objectives":')) {
-              return false;
+        {allMessages.map((message, index) => {
+          // Render exercise spec as formatted bubble - but only if we have the actual spec data
+          if (message.role === 'assistant' && isExerciseSpecMessage(message.content)) {
+            // Try to parse the spec from message content first
+            let spec = null;
+            try {
+              spec = JSON.parse(message.content);
+            } catch {
+              // If parsing fails, use the prop if available
+              spec = exerciseSpec;
             }
-            return true;
-          })
-          .map((message, index) => (
+
+            // Only render detailed bubble if we have spec data
+            if (spec && spec.title) {
+              return (
+                <div key={index} className="flex justify-start">
+                  <div className="max-w-[85%] rounded-lg px-4 py-3 bg-green-50 border border-green-200">
+                    <div className="text-xs font-medium mb-2 text-green-800">
+                      ✓ Exercise Specification Ready
+                    </div>
+                    <div className="space-y-2 text-sm text-gray-900">
+                      {spec.title && (
+                        <div>
+                          <span className="font-semibold">Title:</span> {spec.title}
+                        </div>
+                      )}
+                      {spec.level && (
+                        <div>
+                          <span className="font-semibold">Level:</span> {spec.level}
+                        </div>
+                      )}
+                      {spec.constraints?.time_minutes && (
+                        <div>
+                          <span className="font-semibold">Time:</span>{' '}
+                          {spec.constraints.time_minutes} minutes
+                        </div>
+                      )}
+                      {spec.constraints?.devices && (
+                        <div>
+                          <span className="font-semibold">Devices:</span>{' '}
+                          {spec.constraints.devices}
+                        </div>
+                      )}
+                      {spec.objectives && spec.objectives.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-green-200">
+                          <div className="font-semibold mb-1">Objectives:</div>
+                          <ul className="list-disc list-inside space-y-1 text-sm">
+                            {spec.objectives.map((obj: string, i: number) => (
+                              <li key={i}>{obj}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-xs mt-2 text-green-600">
+                      {new Date(message.timestamp).toLocaleTimeString()}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // If no spec data, skip this message (it will be filtered out)
+            return null;
+          }
+
+          // Render progress updates as blue bubbles (check by timestamp first, then by content)
+          const isProgressUpdate = progressUpdateTimestamps.has(message.timestamp) ||
+                                  (message.role === 'assistant' && isProgressMessage(message.content));
+
+          if (isProgressUpdate) {
+            return (
+              <div key={index} className="flex justify-start">
+                <div className="max-w-[85%] rounded-lg px-4 py-3 bg-blue-50 border border-blue-200">
+                  <div className="text-xs font-medium mb-1 text-blue-800">Progress Update</div>
+                  <div className="text-base font-medium text-gray-900">
+                    {message.content}
+                  </div>
+                  <div className="text-xs mt-1 text-blue-600">
+                    {new Date(message.timestamp).toLocaleTimeString()}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // Render regular messages
+          return (
             <div
               key={index}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -149,125 +226,8 @@ export function PlannerChatPanel({
                 </div>
               </div>
             </div>
-          ))}
-
-        {/* Exercise Spec Message (if available) */}
-        {exerciseSpec && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg px-4 py-3 bg-green-50 border border-green-200">
-              <div className="text-xs font-medium mb-2 text-green-800">
-                ✓ Exercise Specification Ready
-              </div>
-              <div className="space-y-2 text-sm text-gray-900">
-                {exerciseSpec.title && (
-                  <div>
-                    <span className="font-semibold">Title:</span> {exerciseSpec.title}
-                  </div>
-                )}
-                {exerciseSpec.level && (
-                  <div>
-                    <span className="font-semibold">Level:</span> {exerciseSpec.level}
-                  </div>
-                )}
-                {exerciseSpec.constraints?.time_minutes && (
-                  <div>
-                    <span className="font-semibold">Time:</span>{' '}
-                    {exerciseSpec.constraints.time_minutes} minutes
-                  </div>
-                )}
-                {exerciseSpec.constraints?.devices && (
-                  <div>
-                    <span className="font-semibold">Devices:</span>{' '}
-                    {exerciseSpec.constraints.devices}
-                  </div>
-                )}
-                {exerciseSpec.objectives && exerciseSpec.objectives.length > 0 && (
-                  <div className="mt-2 pt-2 border-t border-green-200">
-                    <div className="font-semibold mb-1">Objectives:</div>
-                    <ul className="list-disc list-inside space-y-1 text-sm">
-                      {exerciseSpec.objectives.map((obj, i) => (
-                        <li key={i}>{obj}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Progress Indicator (embedded in chat) */}
-        {showProgress && (
-          <div className="flex justify-start">
-            <div className="max-w-[85%] rounded-lg px-4 py-3 bg-blue-50 border border-blue-200">
-              <div className="text-xs font-medium mb-3 text-blue-800">Generation Progress</div>
-              <div className="space-y-2">
-                {progressStages.map((stage) => (
-                  <div key={stage.key} className="flex items-center gap-2">
-                    <div
-                      className={`flex items-center justify-center w-5 h-5 rounded-full border ${
-                        stage.status === 'complete'
-                          ? 'bg-green-100 border-green-500'
-                          : stage.status === 'running'
-                          ? 'bg-yellow-100 border-yellow-500'
-                          : 'bg-gray-100 border-gray-300'
-                      }`}
-                    >
-                      {stage.status === 'complete' ? (
-                        <svg
-                          className="w-3 h-3 text-green-600"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                      ) : stage.status === 'running' ? (
-                        <svg
-                          className="animate-spin h-3 w-3 text-yellow-600"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          ></path>
-                        </svg>
-                      ) : (
-                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                      )}
-                    </div>
-                    <span
-                      className={`text-sm ${
-                        stage.status === 'complete'
-                          ? 'text-green-900 font-medium'
-                          : stage.status === 'running'
-                          ? 'text-yellow-900 font-medium'
-                          : 'text-gray-500'
-                      }`}
-                    >
-                      {stage.label}
-                      {stage.status === 'running' && '...'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+          );
+        })}
 
         {/* Loading indicator */}
         {isLoading && (
