@@ -75,6 +75,7 @@ STEP 4: Create initial configs (baseline connectivity)
 - Minimal commands: enable, configure terminal, hostname, interface IPs, no shutdown, end
 - Use realistic RFC 1918 addressing
 - Device keys MUST match topology device names (uppercase: R1, R2, etc.)
+- **DO NOT use pipe filters** in any commands - simulator doesn't support `|`
 
 STEP 5: VALIDATE each device's initial config by calling lint_cli()
 - You MUST call lint_cli for EACH device with commands as list of dicts
@@ -85,6 +86,9 @@ STEP 6: Create target configs (completed objectives)
 - Show all learning objectives met
 - Include verification commands if needed
 - Device keys MUST match topology device names (uppercase: R1, R2, etc.)
+- **DO NOT use pipe filters** (e.g., NO `show run | include`, NO `show run | section`)
+- The simulator does NOT support `|` (pipe) in CLI commands
+- Use full commands only: `show running-config`, `show ip interface brief`, etc.
 
 STEP 7: VALIDATE each device's target config by calling lint_cli()
 - Same format as Step 5
