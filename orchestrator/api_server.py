@@ -953,10 +953,12 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
         # Store outputs in labs dict
         if "design_output" in session.state:
-            labs[lab_id]["progress"]["design_output"] = session.state["design_output"]
+            raw_design_output = session.state["design_output"]
+            labs[lab_id]["progress"]["design_output"] = extract_json_from_markdown(raw_design_output)
 
         if "draft_lab_guide" in session.state:
-            labs[lab_id]["progress"]["draft_lab_guide"] = session.state["draft_lab_guide"]
+            raw_draft_lab_guide = session.state["draft_lab_guide"]
+            labs[lab_id]["progress"]["draft_lab_guide"] = extract_json_from_markdown(raw_draft_lab_guide)
 
         # Note: Status updates and progress messages are now handled by monitor_and_run_pipeline()
         # to ensure they happen at the right time during pipeline execution
