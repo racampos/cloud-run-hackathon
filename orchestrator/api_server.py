@@ -10,7 +10,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import deque
 import time
 import asyncio
@@ -227,6 +227,7 @@ async def get_lab_status(lab_id: str):
                             # 1. Trigger messages like "start", "generate"
                             # 2. Validation failure messages with execution IDs
                             # 3. Messages wrapped in triple backticks (duplicates of structured data)
+                            # 4. Design output (topology_yaml) - already displayed in its own UI section
                             if role == "user" and text_content.strip().lower() in ["start", "generate"]:
                                 continue
                             if "Validation FAILED: execution_id=" in text_content:
@@ -235,10 +236,12 @@ async def get_lab_status(lab_id: str):
                                 # Skip if it's a markdown-wrapped version of structured data
                                 # (the actual structured data is already in progress fields)
                                 continue
+                            if '"topology_yaml"' in text_content or "'topology_yaml'" in text_content:
+                                # Skip design_output messages - they're displayed in the topology viewer
+                                continue
 
                             # Generate timestamp: increment by 1 second per message from lab creation time
                             # This preserves chronological order while using UTC timestamps
-                            from datetime import timedelta
                             message_time = base_time + timedelta(seconds=time_offset_seconds)
                             time_offset_seconds += 1
 
@@ -261,9 +264,7 @@ async def get_lab_status(lab_id: str):
 
     # Merge progress messages from local storage into conversation
     # These are canned messages sent during generation and are immediately visible
-    print(f"[DEBUG] Lab {lab_id} progress_messages: {lab.get('progress_messages', [])}")
     if "progress_messages" in lab and lab["progress_messages"]:
-        print(f"[DEBUG] Adding {len(lab['progress_messages'])} progress messages to conversation")
         for progress_msg in lab["progress_messages"]:
             conversation_messages.append({
                 "role": "assistant",
@@ -271,10 +272,34 @@ async def get_lab_status(lab_id: str):
                 "timestamp": progress_msg["timestamp"]
             })
 
-        # Sort all messages by timestamp to maintain chronological order
+    # Sort all messages by timestamp to maintain chronological order
+    conversation_messages.sort(key=lambda msg: msg["timestamp"])
+
+    # Fix ordering: Find the "Perfect!" message and the exercise_spec, swap if needed
+    # The "Perfect!" message should come BEFORE the exercise_spec
+    perfect_idx = None
+    spec_idx = None
+
+    for idx, msg in enumerate(conversation_messages):
+        if msg["role"] == "assistant":
+            if "Perfect! I have everything I need" in msg["content"]:
+                perfect_idx = idx
+            elif msg["content"].strip().startswith("{") and '"title"' in msg["content"] and '"objectives"' in msg["content"]:
+                spec_idx = idx
+
+    # If both found and spec comes before perfect, we need to reorder
+    if perfect_idx is not None and spec_idx is not None and spec_idx < perfect_idx:
+        # Adjust timestamps so perfect comes right before spec
+        spec_msg = conversation_messages[spec_idx]
+        perfect_msg = conversation_messages[perfect_idx]
+
+        # Give perfect message a timestamp 1 second before spec
+        spec_time = datetime.fromisoformat(spec_msg["timestamp"].replace('Z', ''))
+        new_perfect_time = spec_time - timedelta(seconds=1)
+        perfect_msg["timestamp"] = new_perfect_time.isoformat() + 'Z'
+
+        # Re-sort with updated timestamps
         conversation_messages.sort(key=lambda msg: msg["timestamp"])
-    else:
-        print(f"[DEBUG] No progress_messages to add")
 
     # Build response
     response = {k: v for k, v in lab.items() if k not in ["pending_messages", "progress_messages"]}
