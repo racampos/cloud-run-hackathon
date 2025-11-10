@@ -78,14 +78,10 @@ app = FastAPI(
     description="REST API for interactive lab generation with multi-turn Planner conversation"
 )
 
-# CORS middleware
+# CORS middleware - allow all origins for testing
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Local dev
-        "https://netgenius-frontend-*.run.app",  # Production
-        "https://*.run.app"  # Wildcard for Cloud Run
-    ],
+    allow_origins=["*"],  # Allow all origins (for testing)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
