@@ -2,14 +2,9 @@
 
 **AI-Powered Networking Lab Generator**
 
-**Status:** M1 Development (Foundation)
-**Platform:** Google Cloud (Cloud Run + Cloud Run Jobs)
-**Architecture:** Multi-agent system using Google ADK
-**Repository:** Public (Orchestrator only)
-
 ## Overview
 
-NetGenius Instructor Copilot (NIC) automates the full lifecycle of networking lab creation for instructors:
+NetGenius Instructor Copilot (NIC) automates the full lifecycle of networking lab creation for networking instructors:
 
 - Planning learning objectives
 - Designing network topology and configurations
@@ -27,7 +22,7 @@ NetGenius Instructor Copilot (NIC) automates the full lifecycle of networking la
                          │
 ┌────────────────────────┴─────────────────────────────────────┐
 │              Orchestrator (FastAPI + Google ADK)             │
-│                                                              │
+│                   Running on Cloud Run                       │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐     │
 │  │ Planner  │→ │ Designer │→ │  Author  │→ │ Validator │     │
 │  └──────────┘  └──────────┘  └──────────┘  └─────┬─────┘     │
@@ -46,7 +41,7 @@ NetGenius Instructor Copilot (NIC) automates the full lifecycle of networking la
 
 ## Repository Structure
 
-This repository contains **only the open-source orchestrator**. The validation and simulation services are maintained in separate private repositories.
+This repository contains **only the open-source orchestrator**. The validation and simulation service (referred to as headless runner in this README) is maintained in a separate private repository.
 
 ### This Repository (Public)
 
@@ -99,12 +94,35 @@ The orchestrator integrates with the Headless Runner via a well-defined job exec
 
 - Python 3.11+
 - Node.js 18+
-- Google Cloud SDK
-- Access to deployed Headless Runner service
+- Google Gemini API key ([Get one here](https://aistudio.google.com/app/apikey))
+- Google Cloud SDK (optional, only needed for validation features)
 
 ### Running Locally
 
-1. **Start the orchestrator:**
+1. **Configure environment variables:**
+
+```bash
+cd orchestrator
+cp .env.example .env
+```
+
+Edit `.env` and add your Google Gemini API key:
+
+```bash
+GOOGLE_API_KEY=your_google_api_key_here
+```
+
+**Required environment variables:**
+- `GOOGLE_API_KEY` - Your Google Gemini API key (required for all AI agents)
+
+**Optional environment variables** (only needed for Cloud Run Job validation):
+- `GCP_PROJECT_ID` - Your GCP project ID (default: `netgenius-hackathon`)
+- `REGION` - GCP region (default: `us-central1`)
+- `GCS_BUCKET` - GCS bucket for artifacts (default: `netgenius-artifacts-dev`)
+- `PORT` - Server port (default: `8081`)
+- `MOCK_LINTER` - Use mock linter responses (default: `true`)
+
+2. **Start the orchestrator:**
 
 ```bash
 cd orchestrator
@@ -114,7 +132,9 @@ pip install -r requirements.txt
 python api_server.py
 ```
 
-2. **Start the frontend:**
+The orchestrator will start on http://localhost:8081
+
+3. **Start the frontend:**
 
 ```bash
 cd frontend
@@ -122,9 +142,13 @@ npm install
 npm run dev
 ```
 
-3. **Access the application:**
+The frontend will start on http://localhost:3000
+
+4. **Access the application:**
 
 Open http://localhost:3000 in your browser.
+
+**Note:** The validation stage requires access to the private Headless Runner service. For local development and testing, the planner, designer, and author agents will work without it.
 
 ### Deploying to Production
 
