@@ -775,9 +775,14 @@ async def run_pipeline(
 
         # Extract markdown from the draft_lab_guide JSON structure
         if parsed_draft_lab_guide and isinstance(parsed_draft_lab_guide, dict):
-            labs[lab_id]["progress"]["draft_lab_guide_markdown"] = parsed_draft_lab_guide.get("markdown")
+            markdown_content = parsed_draft_lab_guide.get("markdown")
+            labs[lab_id]["progress"]["draft_lab_guide_markdown"] = markdown_content
+            print(f"[DEBUG MARKDOWN] Extracted markdown for {lab_id}: {len(markdown_content) if markdown_content else 0} chars, has_markdown={markdown_content is not None}")
+            if parsed_draft_lab_guide and not markdown_content:
+                print(f"[DEBUG MARKDOWN] draft_lab_guide keys: {list(parsed_draft_lab_guide.keys())}")
         else:
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
+            print(f"[DEBUG MARKDOWN] No parsed_draft_lab_guide for {lab_id}, type={type(parsed_draft_lab_guide)}")
 
         labs[lab_id]["status"] = "author_complete"
         labs[lab_id]["updated_at"] = utc_now()
@@ -1009,11 +1014,17 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
             # Extract markdown from the draft_lab_guide JSON structure
             if parsed_draft_lab_guide and isinstance(parsed_draft_lab_guide, dict):
-                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = parsed_draft_lab_guide.get("markdown")
+                markdown_content = parsed_draft_lab_guide.get("markdown")
+                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = markdown_content
+                print(f"[DEBUG MARKDOWN CHAT] Extracted markdown for {lab_id}: {len(markdown_content) if markdown_content else 0} chars, has_markdown={markdown_content is not None}")
+                if parsed_draft_lab_guide and not markdown_content:
+                    print(f"[DEBUG MARKDOWN CHAT] draft_lab_guide keys: {list(parsed_draft_lab_guide.keys())}")
             else:
                 labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
+                print(f"[DEBUG MARKDOWN CHAT] No parsed_draft_lab_guide for {lab_id}, type={type(parsed_draft_lab_guide)}")
         else:
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
+            print(f"[DEBUG MARKDOWN CHAT] No draft_lab_guide in session state for {lab_id}")
 
         # Send progress message BEFORE setting author_complete status
         await send_progress_update("Lab guide ready! Running automated validation to verify everything works...")
