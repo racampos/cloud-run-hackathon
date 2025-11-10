@@ -773,11 +773,9 @@ async def run_pipeline(
         parsed_draft_lab_guide = extract_json_from_markdown(raw_draft_lab_guide)
         labs[lab_id]["progress"]["draft_lab_guide"] = parsed_draft_lab_guide
 
-        # Read the generated markdown file from output directory
-        markdown_path = os.path.join(os.path.dirname(__file__), "output", "draft_lab_guide.md")
-        if os.path.exists(markdown_path):
-            with open(markdown_path, "r") as f:
-                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = f.read()
+        # Extract markdown from the draft_lab_guide JSON structure
+        if parsed_draft_lab_guide and isinstance(parsed_draft_lab_guide, dict):
+            labs[lab_id]["progress"]["draft_lab_guide_markdown"] = parsed_draft_lab_guide.get("markdown")
         else:
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
 
@@ -1006,13 +1004,14 @@ async def run_generation_pipeline(lab_id: str, dry_run: bool):
 
         if "draft_lab_guide" in session.state:
             raw_draft_lab_guide = session.state["draft_lab_guide"]
-            labs[lab_id]["progress"]["draft_lab_guide"] = extract_json_from_markdown(raw_draft_lab_guide)
+            parsed_draft_lab_guide = extract_json_from_markdown(raw_draft_lab_guide)
+            labs[lab_id]["progress"]["draft_lab_guide"] = parsed_draft_lab_guide
 
-        # Read the generated markdown file from output directory
-        markdown_path = os.path.join(os.path.dirname(__file__), "output", "draft_lab_guide.md")
-        if os.path.exists(markdown_path):
-            with open(markdown_path, "r") as f:
-                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = f.read()
+            # Extract markdown from the draft_lab_guide JSON structure
+            if parsed_draft_lab_guide and isinstance(parsed_draft_lab_guide, dict):
+                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = parsed_draft_lab_guide.get("markdown")
+            else:
+                labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
         else:
             labs[lab_id]["progress"]["draft_lab_guide_markdown"] = None
 
